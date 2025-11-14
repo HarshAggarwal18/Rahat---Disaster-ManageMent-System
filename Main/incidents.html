@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incident Management - Disaster Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet-heat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a2332 0%, #2c3e50 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .incident-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .incident-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .priority-high { border-left-color: #dc2626; }
+        .priority-medium { border-left-color: #f59e0b; }
+        .priority-low { border-left-color: #10b981; }
+        
+        .status-new { background-color: #ef4444; }
+        .status-assigned { background-color: #3b82f6; }
+        .status-in-progress { background-color: #f59e0b; }
+        .status-completed { background-color: #10b981; }
+        .status-resolved { background-color: #6b7280; }
+        
+        .incident-map {
+            height: 400px;
+            border-radius: 8px;
+        }
+        
+        .filter-btn {
+            transition: all 0.3s ease;
+        }
+        
+        .filter-btn.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="gradient-bg shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-white text-xl font-bold">DisasterResponse</h1>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="index.html" class="text-gray-300 hover:text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Dashboard</a>
+                        <a href="incidents.html" class="text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Incidents</a>
+                        <a href="volunteers.html" class="text-gray-300 hover:text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Volunteers</a>
+                        <button id="logout-btn" class="text-gray-300 hover:text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Incident Management</h1>
+            <p class="text-gray-600 mt-2">Monitor, manage, and coordinate incident response</p>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="stats-card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Total Incidents</p>
+                        <p class="text-3xl font-bold text-gray-900" id="total-incidents">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Active Incidents</p>
+                        <p class="text-3xl font-bold text-gray-900" id="active-incidents">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Resolved Today</p>
+                        <p class="text-3xl font-bold text-gray-900" id="resolved-today">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Avg Response Time</p>
+                        <p class="text-3xl font-bold text-gray-900" id="avg-response-time">0<span class="text-lg">m</span></p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.414L11 9.586V6z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters and Actions -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-medium text-gray-700">Filter by:</span>
+                    <button class="filter-btn active px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded" data-filter="all">All</button>
+                    <button class="filter-btn px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded" data-filter="new">New</button>
+                    <button class="filter-btn px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded" data-filter="assigned">Assigned</button>
+                    <button class="filter-btn px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded" data-filter="completed">Completed</button>
+                    <button class="filter-btn px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded" data-filter="critical">Critical</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="refresh-incidents" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm">
+                        🔄 Refresh
+                    </button>
+                    <button id="export-incidents" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm">
+                        📊 Export
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Incidents List -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900">Recent Incidents</h3>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-600">Sort by:</span>
+                            <select id="sort-incidents" class="text-sm border border-gray-300 rounded-md px-2 py-1">
+                                <option value="timestamp">Time</option>
+                                <option value="severity">Severity</option>
+                                <option value="status">Status</option>
+                                <option value="type">Type</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="incidents-list" class="space-y-4">
+                        <!-- Incidents will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-6">
+                <!-- Incident Map -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Incident Map</h3>
+                    <div id="incident-map" class="incident-map"></div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                    <div class="space-y-3">
+                        <button id="assign-volunteer" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors text-sm">
+                            👥 Assign Volunteer
+                        </button>
+                        <button id="escalate-incident" class="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition-colors text-sm">
+                            🚨 Escalate Incident
+                        </button>
+                        <button id="request-resources" class="w-full bg-yellow-600 text-white py-2 px-4 rounded-md hover:bg-yellow-700 transition-colors text-sm">
+                            🔧 Request Resources
+                        </button>
+                        <button id="generate-report" class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors text-sm">
+                            📄 Generate Report
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Incident Statistics -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Incident Statistics</h3>
+                    <div id="incident-chart" style="height: 200px;"></div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
+                    <div id="recent-activity" class="space-y-3">
+                        <!-- Activity items will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Incident Detail Modal -->
+    <div id="incident-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold" id="modal-incident-id">Incident Details</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="modal-content">
+                <!-- Modal content will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+    <script>
+        // Incident Management specific functionality
+        let incidentMap;
+        let currentFilter = 'all';
+        let currentSort = 'timestamp';
+        let allIncidents = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeIncidentPage();
+        });
+
+        function initializeIncidentPage() {
+            // Check authentication
+            const session = localStorage.getItem('disaster_response_session');
+            if (!session) {
+                window.location.href = 'auth.html';
+                return;
+            }
+
+            const user = JSON.parse(session);
+            
+            // Initialize map
+            initializeIncidentMap();
+            
+            // Load incidents
+            loadIncidents();
+            
+            // Setup event listeners
+            setupIncidentEventListeners();
+            
+            // Initialize chart
+            initializeIncidentChart();
+        }
+
+        function initializeIncidentMap() {
+            incidentMap = L.map('incident-map').setView([40.7128, -74.0060], 10);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(incidentMap);
+        }
+
+        function loadIncidents() {
+            allIncidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            
+            // Update statistics
+            updateIncidentStats();
+            
+            // Populate incidents list
+            populateIncidentsList();
+            
+            // Add markers to map
+            addIncidentMarkers();
+            
+            // Populate recent activity
+            populateRecentActivity();
+        }
+
+        function updateIncidentStats() {
+            const total = allIncidents.length;
+            const active = allIncidents.filter(i => i.status === 'new' || i.status === 'assigned' || i.status === 'in-progress').length;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const resolvedToday = allIncidents.filter(i => {
+                if (!i.resolvedAt) return false;
+                const resolvedDate = new Date(i.resolvedAt);
+                resolvedDate.setHours(0, 0, 0, 0);
+                return resolvedDate.getTime() === today.getTime();
+            }).length;
+            
+            // Mock average response time
+            const avgResponse = Math.floor(Math.random() * 20) + 8;
+            
+            document.getElementById('total-incidents').textContent = total;
+            document.getElementById('active-incidents').textContent = active;
+            document.getElementById('resolved-today').textContent = resolvedToday;
+            document.getElementById('avg-response-time').textContent = avgResponse + 'm';
+        }
+
+        function populateIncidentsList() {
+            let filteredIncidents = filterIncidents(allIncidents, currentFilter);
+            filteredIncidents = sortIncidents(filteredIncidents, currentSort);
+            
+            const incidentsList = document.getElementById('incidents-list');
+            
+            if (filteredIncidents.length === 0) {
+                incidentsList.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <p>No incidents found</p>
+                        <p class="text-sm mt-1">Try adjusting your filters</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            incidentsList.innerHTML = filteredIncidents.map(incident => createIncidentCard(incident)).join('');
+        }
+
+        function createIncidentCard(incident) {
+            const priorityClass = incident.severity >= 4 ? 'priority-high' : incident.severity >= 3 ? 'priority-medium' : 'priority-low';
+            const statusClass = `status-${incident.status}`;
+            const statusColor = incident.severity === 5 ? 'bg-purple-500' : 
+                               incident.severity === 4 ? 'bg-red-500' : 
+                               incident.severity === 3 ? 'bg-orange-500' : 
+                               incident.severity === 2 ? 'bg-yellow-500' : 'bg-green-500';
+            
+            return `
+                <div class="incident-card ${priorityClass} bg-white p-6 rounded-lg shadow-sm border" 
+                     data-incident-id="${incident.id}" onclick="showIncidentDetails('${incident.id}')">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xs font-medium px-2 py-1 rounded ${statusColor} text-white">
+                                ${incident.type.toUpperCase()}
+                            </span>
+                            <span class="text-xs px-2 py-1 rounded ${statusClass} text-white">
+                                ${incident.status.replace('-', ' ').toUpperCase()}
+                            </span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-xs text-gray-500">${incident.id}</span>
+                            <div class="text-xs text-gray-400 mt-1">${formatTime(incident.timestamp)}</div>
+                        </div>
+                    </div>
+                    
+                    <h4 class="font-semibold text-gray-900 mb-2">${incident.description}</h4>
+                    
+                    <div class="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
+                        <div>
+                            <span class="font-medium">Severity:</span>
+                            <span class="ml-1">${getSeverityText(incident.severity)}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium">Reporter:</span>
+                            <span class="ml-1">${incident.reporter}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium">Location:</span>
+                            <span class="ml-1">${incident.location.lat.toFixed(4)}, ${incident.location.lng.toFixed(4)}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium">Assigned:</span>
+                            <span class="ml-1">${incident.assignedTo || 'Unassigned'}</span>
+                        </div>
+                    </div>
+                    
+                    ${incident.status === 'new' ? `
+                        <div class="flex space-x-2">
+                            <button onclick="event.stopPropagation(); assignIncident('${incident.id}')" class="flex-1 bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700">
+                                Assign
+                            </button>
+                            <button onclick="event.stopPropagation(); escalateIncident('${incident.id}')" class="flex-1 bg-red-600 text-white py-2 px-3 rounded text-sm hover:bg-red-700">
+                                Escalate
+                            </button>
+                        </div>
+                    ` : incident.status === 'assigned' ? `
+                        <div class="flex space-x-2">
+                            <button onclick="event.stopPropagation(); updateStatus('${incident.id}', 'in-progress')" class="flex-1 bg-yellow-600 text-white py-2 px-3 rounded text-sm hover:bg-yellow-700">
+                                In Progress
+                            </button>
+                            <button onclick="event.stopPropagation(); updateStatus('${incident.id}', 'completed')" class="flex-1 bg-green-600 text-white py-2 px-3 rounded text-sm hover:bg-green-700">
+                                Complete
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function addIncidentMarkers() {
+            // Clear existing markers
+            incidentMap.eachLayer(layer => {
+                if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+                    incidentMap.removeLayer(layer);
+                }
+            });
+            
+            allIncidents.forEach(incident => {
+                const color = incident.severity === 5 ? '#8e44ad' : 
+                             incident.severity === 4 ? '#e74c3c' : 
+                             incident.severity === 3 ? '#e67e22' : 
+                             incident.severity === 2 ? '#f39c12' : '#27ae60';
+                
+                const marker = L.circleMarker([incident.location.lat, incident.location.lng], {
+                    radius: 8,
+                    fillColor: color,
+                    color: '#ffffff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(incidentMap);
+
+                const popupContent = `
+                    <div class="p-2">
+                        <h4 class="font-semibold text-sm">${incident.id}</h4>
+                        <p class="text-xs text-gray-600">${incident.type.toUpperCase()} - Severity ${incident.severity}</p>
+                        <p class="text-xs mt-1">${incident.description}</p>
+                        <p class="text-xs text-gray-500 mt-1">${formatTime(incident.timestamp)}</p>
+                        <p class="text-xs text-gray-500">Status: ${incident.status}</p>
+                    </div>
+                `;
+                marker.bindPopup(popupContent);
+            });
+        }
+
+        function populateRecentActivity() {
+            const recentActivity = document.getElementById('recent-activity');
+            const recentIncidents = allIncidents.slice(0, 5);
+            
+            recentActivity.innerHTML = recentIncidents.map(incident => `
+                <div class="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <div class="w-2 h-2 rounded-full ${getSeverityColor(incident.severity)}"></div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium text-gray-900">${incident.description}</p>
+                        <p class="text-xs text-gray-500">${incident.type.toUpperCase()} • ${incident.id} • ${formatTime(incident.timestamp)}</p>
+                    </div>
+                    <div class="text-xs text-gray-400">${incident.status}</div>
+                </div>
+            `).join('');
+        }
+
+        function setupIncidentEventListeners() {
+            // Filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentFilter = this.dataset.filter;
+                    populateIncidentsList();
+                });
+            });
+            
+            // Sort dropdown
+            document.getElementById('sort-incidents').addEventListener('change', function() {
+                currentSort = this.value;
+                populateIncidentsList();
+            });
+            
+            // Action buttons
+            document.getElementById('refresh-incidents').addEventListener('click', loadIncidents);
+            document.getElementById('export-incidents').addEventListener('click', exportIncidents);
+            
+            // Quick action buttons
+            document.getElementById('assign-volunteer').addEventListener('click', () => {
+                showNotification('Select an incident to assign a volunteer', 'info');
+            });
+            document.getElementById('escalate-incident').addEventListener('click', () => {
+                showNotification('Select an incident to escalate', 'info');
+            });
+            document.getElementById('request-resources').addEventListener('click', () => {
+                showNotification('Select an incident to request resources', 'info');
+            });
+            document.getElementById('generate-report').addEventListener('click', generateIncidentReport);
+            
+            // Modal
+            document.getElementById('close-modal').addEventListener('click', closeIncidentModal);
+            
+            // Logout
+            document.getElementById('logout-btn').addEventListener('click', function() {
+                localStorage.removeItem('disaster_response_session');
+                window.location.href = 'auth.html';
+            });
+        }
+
+        function filterIncidents(incidents, filter) {
+            switch (filter) {
+                case 'new':
+                    return incidents.filter(i => i.status === 'new');
+                case 'assigned':
+                    return incidents.filter(i => i.status === 'assigned');
+                case 'completed':
+                    return incidents.filter(i => i.status === 'completed');
+                case 'critical':
+                    return incidents.filter(i => i.severity >= 4);
+                default:
+                    return incidents;
+            }
+        }
+
+        function sortIncidents(incidents, sortBy) {
+            return [...incidents].sort((a, b) => {
+                switch (sortBy) {
+                    case 'severity':
+                        return b.severity - a.severity;
+                    case 'status':
+                        return a.status.localeCompare(b.status);
+                    case 'type':
+                        return a.type.localeCompare(b.type);
+                    case 'timestamp':
+                    default:
+                        return new Date(b.timestamp) - new Date(a.timestamp);
+                }
+            });
+        }
+
+        function showIncidentDetails(incidentId) {
+            const incident = allIncidents.find(i => i.id === incidentId);
+            if (!incident) return;
+            
+            document.getElementById('modal-incident-id').textContent = `${incident.id} - Incident Details`;
+            
+            const modalContent = document.getElementById('modal-content');
+            modalContent.innerHTML = `
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">Basic Information</h4>
+                            <div class="space-y-2 text-sm">
+                                <div><span class="font-medium">Type:</span> ${incident.type.toUpperCase()}</div>
+                                <div><span class="font-medium">Severity:</span> ${getSeverityText(incident.severity)}</div>
+                                <div><span class="font-medium">Status:</span> ${incident.status.replace('-', ' ').toUpperCase()}</div>
+                                <div><span class="font-medium">Reporter:</span> ${incident.reporter}</div>
+                                <div><span class="font-medium">Time:</span> ${formatTime(incident.timestamp)}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">Location</h4>
+                            <div class="space-y-2 text-sm">
+                                <div><span class="font-medium">Latitude:</span> ${incident.location.lat.toFixed(6)}</div>
+                                <div><span class="font-medium">Longitude:</span> ${incident.location.lng.toFixed(6)}</div>
+                                <div id="modal-map" style="height: 150px; border-radius: 4px;" class="mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h4 class="font-medium text-gray-900 mb-2">Description</h4>
+                        <p class="text-sm text-gray-700">${incident.description}</p>
+                    </div>
+                    
+                    ${incident.assignedTo ? `
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">Assignment</h4>
+                            <p class="text-sm text-gray-700">Assigned to: ${incident.assignedTo}</p>
+                            ${incident.assignedVolunteers && incident.assignedVolunteers.length > 0 ? `
+                                <p class="text-sm text-gray-700 mt-1">Volunteers: ${incident.assignedVolunteers.join(', ')}</p>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    ${incident.resources && incident.resources.length > 0 ? `
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">Resources</h4>
+                            <ul class="text-sm text-gray-700">
+                                ${incident.resources.map(resource => `<li>• ${resource}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                    
+                    ${incident.resolvedAt ? `
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">Resolution</h4>
+                            <p class="text-sm text-gray-700">Resolved at: ${formatTime(incident.resolvedAt)}</p>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="flex space-x-3 pt-4 border-t">
+                        ${incident.status === 'new' ? `
+                            <button onclick="assignIncident('${incident.id}')" class="flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">
+                                Assign Volunteer
+                            </button>
+                            <button onclick="escalateIncident('${incident.id}')" class="flex-1 bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700">
+                                Escalate
+                            </button>
+                        ` : incident.status === 'assigned' ? `
+                            <button onclick="updateStatus('${incident.id}', 'in-progress')" class="flex-1 bg-yellow-600 text-white py-2 px-4 rounded hover:bg-yellow-700">
+                                Mark In Progress
+                            </button>
+                            <button onclick="updateStatus('${incident.id}', 'completed')" class="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700">
+                                Mark Complete
+                            </button>
+                        ` : ''}
+                        <button onclick="closeIncidentModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Initialize mini map
+            setTimeout(() => {
+                const modalMap = L.map('modal-map').setView([incident.location.lat, incident.location.lng], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(modalMap);
+                
+                L.marker([incident.location.lat, incident.location.lng]).addTo(modalMap);
+            }, 100);
+            
+            document.getElementById('incident-modal').classList.remove('hidden');
+            document.getElementById('incident-modal').classList.add('flex');
+        }
+
+        function closeIncidentModal() {
+            document.getElementById('incident-modal').classList.add('hidden');
+            document.getElementById('incident-modal').classList.remove('flex');
+        }
+
+        function assignIncident(incidentId) {
+            const incident = allIncidents.find(i => i.id === incidentId);
+            if (incident) {
+                incident.status = 'assigned';
+                incident.assignedTo = 'VOL-001'; // Mock assignment
+                incident.assignedVolunteers = ['VOL-001'];
+                
+                localStorage.setItem('disaster_response_incidents', JSON.stringify(allIncidents));
+                loadIncidents();
+                showNotification(`Incident ${incidentId} assigned to volunteer`, 'success');
+                closeIncidentModal();
+            }
+        }
+
+        function escalateIncident(incidentId) {
+            const incident = allIncidents.find(i => i.id === incidentId);
+            if (incident) {
+                incident.severity = Math.min(5, incident.severity + 1);
+                incident.status = 'assigned';
+                
+                localStorage.setItem('disaster_response_incidents', JSON.stringify(allIncidents));
+                loadIncidents();
+                showNotification(`Incident ${incidentId} escalated to severity ${incident.severity}`, 'warning');
+                closeIncidentModal();
+            }
+        }
+
+        function updateStatus(incidentId, newStatus) {
+            const incident = allIncidents.find(i => i.id === incidentId);
+            if (incident) {
+                incident.status = newStatus;
+                if (newStatus === 'completed') {
+                    incident.resolvedAt = new Date();
+                }
+                
+                localStorage.setItem('disaster_response_incidents', JSON.stringify(allIncidents));
+                loadIncidents();
+                showNotification(`Incident ${incidentId} status updated to ${newStatus}`, 'success');
+                closeIncidentModal();
+            }
+        }
+
+        function exportIncidents() {
+            const csvContent = "data:text/csv;charset=utf-8," + 
+                "ID,Type,Severity,Status,Description,Reporter,Timestamp,Location,Assigned To\n" +
+                allIncidents.map(i => 
+                    `${i.id},${i.type},${i.severity},${i.status},"${i.description}",${i.reporter},${new Date(i.timestamp).toISOString()},"${i.location.lat},${i.location.lng}",${i.assignedTo || ''}`
+                ).join("\n");
+            
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `incidents_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showNotification('Incidents exported successfully', 'success');
+        }
+
+        function generateIncidentReport() {
+            const reportData = {
+                total: allIncidents.length,
+                byType: {},
+                byStatus: {},
+                bySeverity: {},
+                resolvedToday: allIncidents.filter(i => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return i.resolvedAt && new Date(i.resolvedAt) >= today;
+                }).length
+            };
+            
+            allIncidents.forEach(incident => {
+                reportData.byType[incident.type] = (reportData.byType[incident.type] || 0) + 1;
+                reportData.byStatus[incident.status] = (reportData.byStatus[incident.status] || 0) + 1;
+                const severityText = getSeverityText(incident.severity);
+                reportData.bySeverity[severityText] = (reportData.bySeverity[severityText] || 0) + 1;
+            });
+            
+            console.log('Incident Report:', reportData);
+            showNotification('Incident report generated (see console)', 'info');
+        }
+
+        function initializeIncidentChart() {
+            const chartElement = document.getElementById('incident-chart');
+            if (!chartElement) return;
+            
+            const chart = echarts.init(chartElement);
+            
+            const statusCounts = {};
+            allIncidents.forEach(incident => {
+                statusCounts[incident.status] = (statusCounts[incident.status] || 0) + 1;
+            });
+            
+            const data = Object.entries(statusCounts).map(([status, count]) => ({
+                name: status.replace('-', ' ').toUpperCase(),
+                value: count
+            }));
+            
+            const option = {
+                tooltip: {
+                    trigger: 'item'
+                },
+                series: [{
+                    type: 'pie',
+                    radius: '70%',
+                    data: data,
+                    emphasis: {
+                        itemStyle: {
+                            shadowBlur: 10,
+                            shadowOffsetX: 0,
+                            shadowColor: 'rgba(0, 0, 0, 0.5)'
+                        }
+                    }
+                }]
+            };
+            
+            chart.setOption(option);
+        }
+
+        function getSeverityText(severity) {
+            const texts = {
+                1: 'Low',
+                2: 'Medium',
+                3: 'High',
+                4: 'Critical',
+                5: 'Emergency'
+            };
+            return texts[severity] || 'Medium';
+        }
+
+        function getSeverityColor(severity) {
+            const colors = {
+                1: 'bg-green-500',
+                2: 'bg-yellow-500',
+                3: 'bg-orange-500',
+                4: 'bg-red-500',
+                5: 'bg-purple-500'
+            };
+            return colors[severity] || 'bg-yellow-500';
+        }
+
+        function formatTime(timestamp) {
+            const now = new Date();
+            const diff = now - new Date(timestamp);
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(minutes / 60);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return new Date(timestamp).toLocaleDateString();
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-20 right-4 p-4 rounded-lg shadow-lg z-50 ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 
+                type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+            } text-white`;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            anime({
+                targets: notification,
+                translateX: [300, 0],
+                opacity: [0, 1],
+                duration: 300,
+                easing: 'easeOutQuad'
+            });
+
+            setTimeout(() => {
+                anime({
+                    targets: notification,
+                    translateX: [0, 300],
+                    opacity: [1, 0],
+                    duration: 300,
+                    easing: 'easeInQuad',
+                    complete: () => {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }
+                });
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

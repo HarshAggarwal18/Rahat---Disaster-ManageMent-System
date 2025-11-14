@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disaster Response Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/typed.js/2.0.12/typed.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@splidejs/splide@4.1.4/dist/js/splide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet-heat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a2332 0%, #2c3e50 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .hero-section {
+            background: linear-gradient(135deg, #1a2332 0%, #2c3e50 50%, #34495e 100%);
+            min-height: 60vh;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero-content {
+            position: relative;
+            z-index: 10;
+        }
+        
+        .floating-shapes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+        
+        .shape {
+            position: absolute;
+            opacity: 0.1;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .shape:nth-child(1) { top: 20%; left: 10%; animation-delay: 0s; }
+        .shape:nth-child(2) { top: 60%; left: 80%; animation-delay: 2s; }
+        .shape:nth-child(3) { top: 80%; left: 20%; animation-delay: 4s; }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .incident-map {
+            height: 400px;
+            border-radius: 8px;
+        }
+        
+        .chart-container {
+            height: 300px;
+            width: 100%;
+        }
+        
+        .quick-report-form {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border: 1px solid #cbd5e0;
+        }
+        
+        .filter-btn {
+            transition: all 0.3s ease;
+        }
+        
+        .filter-btn.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        
+        .incident-feed-item {
+            border-left: 4px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .incident-feed-item:hover {
+            border-left-color: #3b82f6;
+            background-color: #f8fafc;
+        }
+        
+        .emergency-alert {
+            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+            border: 1px solid #fca5a5;
+        }
+        
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .role-indicator {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .role-admin { background-color: #dc2626; color: white; }
+        .role-user { background-color: #059669; color: white; }
+        .role-volunteer { background-color: #2563eb; color: white; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="gradient-bg shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-white text-xl font-bold">DisasterResponse</h1>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4" id="navigation-container">
+                        <a href="index.html" class="text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Dashboard</a>
+                        <a href="volunteers.html" class="text-gray-300 hover:text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors" id="volunteer-link" style="display: none;">Volunteers</a>
+                        <a href="admin.html" class="text-gray-300 hover:text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors" id="admin-link" style="display: none;">Admin</a>
+                        <span id="current-user-display" class="text-gray-300 px-3 py-2 text-sm font-medium"></span>
+                        <button id="logout-btn" class="text-gray-300 hover:text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Emergency Alert -->
+    <div id="emergency-alert" class="emergency-alert mx-4 mt-4 rounded-lg p-4 hidden">
+        <div class="flex items-center">
+            <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center mr-3 pulse-animation">
+                <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div>
+                <h3 class="font-semibold text-red-800">ACTIVE EMERGENCY ALERT</h3>
+                <p class="text-sm text-red-700">Multiple high-priority incidents detected. Immediate response required.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="hero-section flex items-center justify-center text-white">
+        <div class="floating-shapes">
+            <div class="shape w-16 h-16 bg-orange-400 rounded-full"></div>
+            <div class="shape w-12 h-12 bg-red-400 rounded-lg"></div>
+            <div class="shape w-20 h-20 bg-yellow-400 rounded-full"></div>
+        </div>
+        
+        <div class="hero-content text-center max-w-4xl mx-auto px-4">
+            <h1 class="text-5xl md:text-7xl font-bold mb-6">
+                <span id="typed-text"></span>
+            </h1>
+            <p class="text-xl md:text-2xl mb-8 text-gray-200">
+                Real-time crisis coordination and emergency response management
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button id="quick-report-btn" class="bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors text-lg">
+                    🚨 Report Emergency
+                </button>
+                <button id="view-live-map" class="bg-transparent border-2 border-white hover:bg-white hover:text-gray-900 text-white px-8 py-3 rounded-lg font-semibold transition-colors text-lg">
+                    🗺️ Live Map
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Dashboard -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="stats-card card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Active Incidents</p>
+                        <p class="text-3xl font-bold text-gray-900" id="critical-total">0</p>
+                        <p class="text-red-600 text-sm mt-1">
+                            <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">+3 since last hour</span>
+                        </p>
+                    </div>
+                    <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Active Volunteers</p>
+                        <p class="text-3xl font-bold text-gray-900" id="volunteers-total">0</p>
+                        <p class="text-blue-600 text-sm mt-1">
+                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">85% response rate</span>
+                        </p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Resolved Today</p>
+                        <p class="text-3xl font-bold text-gray-900" id="resolved-today">0</p>
+                        <p class="text-green-600 text-sm mt-1">
+                            <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">+12% efficiency</span>
+                        </p>
+                    </div>
+                    <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.414L11 9.586V6z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Avg Response Time</p>
+                        <p class="text-3xl font-bold text-gray-900" id="avg-response">0<span class="text-lg">m</span></p>
+                        <p class="text-green-600 text-sm mt-1">
+                            <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">-8% improvement</span>
+                        </p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Role-based Quick Actions -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" id="quick-actions">
+            <!-- Actions will be populated based on user role -->
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- Interactive Map -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900">Live Incident Map</h3>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-600">Map Controls:</span>
+                            <button id="toggle-heatmap" class="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
+                                🌡️ Heatmap
+                            </button>
+                            <button id="toggle-clusters" class="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
+                                📍 Clusters
+                            </button>
+                        </div>
+                    </div>
+                    <div id="incident-map" class="incident-map"></div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Incident Trends</h3>
+                        <div id="trends-chart" class="chart-container"></div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-sm p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Response Time Analysis</h3>
+                        <div id="response-chart" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <!-- Role-specific Content -->
+                <div id="role-specific-content">
+                    <!-- Content will be populated based on user role -->
+                </div>
+            </div>
+
+            <!-- Right Sidebar -->
+            <div class="space-y-6">
+                <!-- Filter Buttons -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Filter Incidents</h3>
+                    <div class="space-y-2">
+                        <button id="filter-all" class="filter-btn active w-full text-left px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded">All Incidents</button>
+                        <button id="filter-critical" class="filter-btn w-full text-left px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded">🔴 Critical Only</button>
+                        <button id="filter-fire" class="filter-btn w-full text-left px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded">🔥 Fire Incidents</button>
+                        <button id="filter-medical" class="filter-btn w-full text-left px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded">🏥 Medical</button>
+                    </div>
+                </div>
+
+                <!-- Heatmap Chart -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Incident Density</h3>
+                    <div id="heatmap-chart" class="chart-container"></div>
+                </div>
+
+                <!-- Live Activity Feed -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Live Activity Feed</h3>
+                    <div id="incident-feed" class="space-y-3 max-h-96 overflow-y-auto">
+                        <!-- Activity items will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- System Status -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">System Status</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">🖥️ System Health</span>
+                            <span class="text-sm font-medium text-green-600">98% Operational</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">📡 Communications</span>
+                            <span class="text-sm font-medium text-green-600">Online</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">🗄️ Database</span>
+                            <span class="text-sm font-medium text-green-600">Synced</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-700">🔋 Backup Systems</span>
+                            <span class="text-sm font-medium text-yellow-600">Standby</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p class="text-gray-400">&copy; 2025 Disaster Response System. Advanced Emergency Management Platform.</p>
+            <p class="text-gray-500 text-sm mt-2">Powered by Real-time Analytics and AI-driven Response Coordination</p>
+        </div>
+    </footer>
+
+    <script>
+        let disasterSystem;
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDashboard();
+        });
+
+        function initializeDashboard() {
+            // Check authentication
+            const session = localStorage.getItem('disaster_response_session');
+            if (!session) {
+                window.location.href = 'auth.html';
+                return;
+            }
+
+            currentUser = JSON.parse(session);
+            
+            // Update user display and navigation
+            updateUserDisplay();
+            updateNavigationForRole(currentUser.role);
+            
+            // Initialize typed text animation
+            if (document.getElementById('typed-text')) {
+                new Typed('#typed-text', {
+                    strings: [
+                        'Emergency Response Dashboard',
+                        'Real-time Crisis Coordination',
+                        'Disaster Management System',
+                        'AI-Powered Response Platform'
+                    ],
+                    typeSpeed: 50,
+                    backSpeed: 30,
+                    backDelay: 2000,
+                    loop: true,
+                    showCursor: true,
+                    cursorChar: '|'
+                });
+            }
+            
+            // Initialize main system
+            disasterSystem = new DisasterManagementSystem();
+            
+            // Load role-specific content
+            loadRoleSpecificContent();
+            
+            // Setup event listeners
+            setupDashboardEventListeners();
+            
+            // Show emergency alert after 2 seconds
+            setTimeout(() => {
+                const alert = document.getElementById('emergency-alert');
+                if (alert) {
+                    alert.classList.remove('hidden');
+                    anime({
+                        targets: alert,
+                        translateY: [-50, 0],
+                        opacity: [0, 1],
+                        duration: 500,
+                        easing: 'easeOutQuad'
+                    });
+                }
+            }, 2000);
+        }
+
+        function updateUserDisplay() {
+            const userDisplay = document.getElementById('current-user-display');
+            if (userDisplay && currentUser) {
+                userDisplay.innerHTML = `
+                    ${currentUser.firstName} ${currentUser.lastName} 
+                    <span class="role-indicator role-${currentUser.role}">${currentUser.role.toUpperCase()}</span>
+                `;
+            }
+        }
+
+        function updateNavigationForRole(role) {
+            const volunteerLink = document.getElementById('volunteer-link');
+            const adminLink = document.getElementById('admin-link');
+            
+            if (role === 'volunteer') {
+                volunteerLink.style.display = 'block';
+            } else if (role === 'admin') {
+                adminLink.style.display = 'block';
+                volunteerLink.style.display = 'block';
+            }
+        }
+
+        function loadRoleSpecificContent() {
+            const quickActions = document.getElementById('quick-actions');
+            const roleContent = document.getElementById('role-specific-content');
+            
+            switch (currentUser.role) {
+                case 'user':
+                    loadUserContent(quickActions, roleContent);
+                    break;
+                case 'volunteer':
+                    loadVolunteerContent(quickActions, roleContent);
+                    break;
+                case 'admin':
+                    loadAdminContent(quickActions, roleContent);
+                    break;
+                default:
+                    loadDefaultContent(quickActions, roleContent);
+            }
+        }
+
+        function loadUserContent(quickActions, roleContent) {
+            quickActions.innerHTML = `
+                <button onclick="window.location.href='user.html'" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    📊 My Reports
+                </button>
+                <button onclick="window.location.href='user.html#report-form'" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    🚨 Report Incident
+                </button>
+                <button onclick="window.location.href='user.html#map'" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    🗺️ View Incidents
+                </button>
+            `;
+            
+            roleContent.innerHTML = `
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Incident Report</h3>
+                    <form id="quick-report-form" class="quick-report-form p-4 rounded-lg">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Incident Type</label>
+                                <select id="incident-type" class="w-full p-2 border border-gray-300 rounded-md" required>
+                                    <option value="fire">🔥 Fire</option>
+                                    <option value="medical">🏥 Medical Emergency</option>
+                                    <option value="flood">🌊 Flooding</option>
+                                    <option value="accident">🚗 Traffic Accident</option>
+                                    <option value="earthquake">🌍 Earthquake</option>
+                                    <option value="other">❓ Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Severity Level</label>
+                                <select id="incident-severity" class="w-full p-2 border border-gray-300 rounded-md" required>
+                                    <option value="1">🟢 Low</option>
+                                    <option value="2" selected>🟡 Medium</option>
+                                    <option value="3">🟠 High</option>
+                                    <option value="4">🔴 Critical</option>
+                                    <option value="5">🟣 Emergency</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea id="incident-description" rows="3" class="w-full p-2 border border-gray-300 rounded-md" placeholder="Describe the incident..." required></textarea>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button type="submit" class="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition-colors font-medium">
+                                🚨 Report Incident
+                            </button>
+                            <button type="button" id="use-current-location" class="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors">
+                                📍 Use Current Location
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+        }
+
+        function loadVolunteerContent(quickActions, roleContent) {
+            quickActions.innerHTML = `
+                <button onclick="window.location.href='volunteers.html'" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    🚑 Volunteer Dashboard
+                </button>
+                <button onclick="window.location.href='volunteers.html#tasks'" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    📋 My Tasks
+                </button>
+                <button onclick="window.location.href='volunteers.html#map'" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    🗺️ Live Map
+                </button>
+            `;
+            
+            roleContent.innerHTML = `
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Volunteer Tasks Overview</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="text-center p-4 bg-green-50 rounded-lg">
+                            <div class="text-2xl font-bold text-green-600" id="volunteer-available">0</div>
+                            <div class="text-sm text-gray-600">Available Tasks</div>
+                        </div>
+                        <div class="text-center p-4 bg-blue-50 rounded-lg">
+                            <div class="text-2xl font-bold text-blue-600" id="volunteer-assigned">0</div>
+                            <div class="text-sm text-gray-600">My Tasks</div>
+                        </div>
+                        <div class="text-center p-4 bg-gray-50 rounded-lg">
+                            <div class="text-2xl font-bold text-gray-600" id="volunteer-completed">0</div>
+                            <div class="text-sm text-gray-600">Completed</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function loadAdminContent(quickActions, roleContent) {
+            quickActions.innerHTML = `
+                <button onclick="window.location.href='admin.html'" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    👨‍💼 Admin Panel
+                </button>
+                <button onclick="window.location.href='admin.html#verification'" class="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    ✅ Verify Incidents
+                </button>
+                <button onclick="window.location.href='admin.html#users'" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    👥 Manage Users
+                </button>
+            `;
+            
+            roleContent.innerHTML = `
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">System Overview</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="text-center p-4 bg-red-50 rounded-lg">
+                            <div class="text-2xl font-bold text-red-600" id="admin-unverified">0</div>
+                            <div class="text-sm text-gray-600">Unverified Incidents</div>
+                        </div>
+                        <div class="text-center p-4 bg-blue-50 rounded-lg">
+                            <div class="text-2xl font-bold text-blue-600" id="admin-users">0</div>
+                            <div class="text-sm text-gray-600">Total Users</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function loadDefaultContent(quickActions, roleContent) {
+            quickActions.innerHTML = `
+                <button onclick="window.location.href='auth.html'" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                    🔑 Login to Access Features
+                </button>
+            `;
+            
+            roleContent.innerHTML = `
+                <div class="bg-white rounded-lg shadow-sm p-6 text-center">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Welcome to DisasterResponse</h3>
+                    <p class="text-gray-600 mb-4">Please login to access the full features of the system.</p>
+                    <button onclick="window.location.href='auth.html'" class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors">
+                        Login Now
+                    </button>
+                </div>
+            `;
+        }
+
+        function setupDashboardEventListeners() {
+            // Quick report button
+            document.getElementById('quick-report-btn').addEventListener('click', function() {
+                if (currentUser.role === 'user') {
+                    document.getElementById('quick-report-section').scrollIntoView({ 
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                } else {
+                    showNotification('Please login as a User to report incidents', 'info');
+                }
+            });
+
+            // View live map button
+            document.getElementById('view-live-map').addEventListener('click', function() {
+                document.getElementById('incident-map').scrollIntoView({ 
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            });
+
+            // Filter buttons
+            const filterButtons = ['filter-all', 'filter-critical', 'filter-fire', 'filter-medical'];
+            filterButtons.forEach(buttonId => {
+                const button = document.getElementById(buttonId);
+                if (button) {
+                    button.addEventListener('click', () => {
+                        if (disasterSystem) {
+                            disasterSystem.filterIncidents(buttonId.replace('filter-', ''));
+                            disasterSystem.updateFilterButtons(buttonId);
+                        }
+                    });
+                }
+            });
+
+            // Map toggle buttons
+            document.getElementById('toggle-heatmap').addEventListener('click', function() {
+                if (disasterSystem && disasterSystem.heatmapLayer) {
+                    const heatmap = disasterSystem.heatmapLayer;
+                    if (heatmap._map) {
+                        disasterSystem.map.removeLayer(heatmap);
+                    } else {
+                        disasterSystem.map.addLayer(heatmap);
+                    }
+                }
+            });
+
+            document.getElementById('toggle-clusters').addEventListener('click', function() {
+                if (disasterSystem && disasterSystem.markerClusterGroup) {
+                    const clusters = disasterSystem.markerClusterGroup;
+                    if (clusters._map) {
+                        disasterSystem.map.removeLayer(clusters);
+                    } else {
+                        disasterSystem.map.addLayer(clusters);
+                    }
+                }
+            });
+
+            // Logout
+            document.getElementById('logout-btn').addEventListener('click', function() {
+                localStorage.removeItem('disaster_response_session');
+                window.location.href = 'auth.html';
+            });
+        }
+
+        function loadDashboardStats() {
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            const users = JSON.parse(localStorage.getItem('disaster_response_users') || '[]');
+            
+            // General stats
+            document.getElementById('critical-total').textContent = incidents.filter(i => i.verified).length;
+            document.getElementById('volunteers-total').textContent = users.filter(u => u.role === 'volunteer').length;
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const resolvedToday = incidents.filter(i => {
+                if (!i.resolvedAt) return false;
+                const resolvedDate = new Date(i.resolvedAt);
+                resolvedDate.setHours(0, 0, 0, 0);
+                return resolvedDate.getTime() === today.getTime();
+            }).length;
+            document.getElementById('resolved-today').textContent = resolvedToday;
+            
+            // Role-specific stats
+            if (currentUser.role === 'volunteer') {
+                const myTasks = incidents.filter(i => i.assignedTo === currentUser.id);
+                document.getElementById('volunteer-available').textContent = incidents.filter(i => i.status === 'available' && i.verified).length;
+                document.getElementById('volunteer-assigned').textContent = myTasks.filter(i => i.status === 'pending').length;
+                document.getElementById('volunteer-completed').textContent = myTasks.filter(i => i.status === 'completed').length;
+            }
+            
+            if (currentUser.role === 'admin') {
+                document.getElementById('admin-unverified').textContent = incidents.filter(i => !i.verified).length;
+                document.getElementById('admin-users').textContent = users.length;
+            }
+        }
+
+        // Initialize animations when page loads
+        setTimeout(() => {
+            animateStatistics();
+            loadDashboardStats();
+        }, 1000);
+
+        // Animate statistics on load
+        function animateStatistics() {
+            const stats = [
+                { id: 'critical-total', target: 24 },
+                { id: 'volunteers-total', target: 342 },
+                { id: 'resolved-today', target: 18 },
+                { id: 'avg-response', target: 12, suffix: 'm' }
+            ];
+
+            stats.forEach((stat, index) => {
+                setTimeout(() => {
+                    const element = document.getElementById(stat.id);
+                    if (element) {
+                        animateNumber(element, 0, stat.target, stat.suffix || '');
+                    }
+                }, index * 200);
+            });
+        }
+
+        function animateNumber(element, start, end, suffix = '') {
+            const duration = 2000;
+            const startTime = performance.now();
+            
+            const animate = (currentTime) => {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                const current = Math.floor(start + (end - start) * progress);
+                element.textContent = current + suffix;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Disaster Management System Class (simplified for dashboard)
+        class DisasterManagementSystem {
+            constructor() {
+                this.map = null;
+                this.incidents = [];
+                this.heatmapLayer = null;
+                this.markerClusterGroup = null;
+                this.init();
+            }
+
+            init() {
+                this.initializeMap();
+                this.loadData();
+                this.setupEventListeners();
+            }
+
+            initializeMap() {
+                if (document.getElementById('incident-map')) {
+                    this.map = L.map('incident-map').setView([40.7128, -74.0060], 10);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(this.map);
+
+                    this.markerClusterGroup = L.markerClusterGroup({
+                        chunkedLoading: true,
+                        maxClusterRadius: 50
+                    });
+                    this.map.addLayer(this.markerClusterGroup);
+
+                    this.initializeHeatmap();
+                    this.updateIncidentMarkers();
+                }
+            }
+
+            initializeHeatmap() {
+                const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+                const verifiedIncidents = incidents.filter(i => i.verified);
+                
+                const heatmapData = verifiedIncidents.map(incident => [
+                    incident.location.lat,
+                    incident.location.lng,
+                    incident.severity / 5
+                ]);
+
+                if (heatmapData.length > 0) {
+                    this.heatmapLayer = L.heatLayer(heatmapData, {
+                        radius: 25,
+                        blur: 15,
+                        maxZoom: 17,
+                        gradient: {
+                            0.2: '#27ae60',
+                            0.4: '#f39c12',
+                            0.6: '#e67e22',
+                            0.8: '#e74c3c',
+                            1.0: '#8e44ad'
+                        }
+                    });
+                }
+            }
+
+            updateIncidentMarkers() {
+                if (!this.markerClusterGroup) return;
+                
+                this.markerClusterGroup.clearLayers();
+                
+                const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+                const verifiedIncidents = incidents.filter(i => i.verified);
+                
+                verifiedIncidents.forEach(incident => {
+                    const color = incident.severity === 5 ? '#8e44ad' : 
+                                 incident.severity === 4 ? '#e74c3c' : 
+                                 incident.severity === 3 ? '#e67e22' : 
+                                 incident.severity === 2 ? '#f39c12' : '#27ae60';
+                    
+                    const marker = L.circleMarker([incident.location.lat, incident.location.lng], {
+                        radius: 8,
+                        fillColor: color,
+                        color: '#ffffff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    });
+
+                    const popupContent = `
+                        <div class="p-2">
+                            <h4 class="font-semibold text-sm">${incident.id}</h4>
+                            <p class="text-xs text-gray-600">${incident.type.toUpperCase()} - Severity ${incident.severity}</p>
+                            <p class="text-xs mt-1">${incident.description}</p>
+                            <p class="text-xs text-gray-500 mt-1">${formatTime(incident.timestamp)}</p>
+                            <p class="text-xs text-gray-500">Reporter: ${incident.reporter}</p>
+                            <p class="text-xs text-gray-500">Status: ${incident.status}</p>
+                        </div>
+                    `;
+
+                    marker.bindPopup(popupContent);
+                    this.markerClusterGroup.addLayer(marker);
+                });
+            }
+
+            loadData() {
+                this.incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+                this.updateIncidentFeed();
+            }
+
+            updateIncidentFeed() {
+                const feedElement = document.getElementById('incident-feed');
+                if (!feedElement) return;
+
+                const recentIncidents = this.incidents.filter(i => i.verified).slice(0, 8);
+                
+                feedElement.innerHTML = recentIncidents.map(incident => `
+                    <div class="incident-feed-item p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-2 h-2 rounded-full ${this.getSeverityColor(incident.severity)}"></div>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-gray-900">${incident.description}</p>
+                                <p class="text-xs text-gray-500">${incident.type.toUpperCase()} • ${incident.id} • ${formatTime(incident.timestamp)}</p>
+                                <p class="text-xs text-gray-500">Reporter: ${incident.reporter}</p>
+                                <p class="text-xs ${incident.status === 'available' ? 'text-green-600' : 
+                                                  incident.status === 'pending' ? 'text-blue-600' : 'text-gray-600'}">
+                                    Status: ${incident.status.toUpperCase()}
+                                </p>
+                            </div>
+                            <div class="text-xs text-gray-400">${incident.status}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            filterIncidents(filter) {
+                // Update marker visibility based on filter
+                this.updateIncidentMarkers();
+            }
+
+            updateFilterButtons(activeButtonId) {
+                const filterButtons = ['filter-all', 'filter-critical', 'filter-fire', 'filter-medical'];
+                filterButtons.forEach(buttonId => {
+                    const button = document.getElementById(buttonId);
+                    if (button) {
+                        if (buttonId === activeButtonId) {
+                            button.className = 'filter-btn active w-full text-left px-3 py-2 text-sm bg-blue-500 text-white rounded';
+                        } else {
+                            button.className = 'filter-btn w-full text-left px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded';
+                        }
+                    }
+                });
+            }
+
+            getSeverityColor(severity) {
+                const colors = {
+                    1: 'bg-green-500',
+                    2: 'bg-yellow-500',
+                    3: 'bg-orange-500',
+                    4: 'bg-red-500',
+                    5: 'bg-purple-500'
+                };
+                return colors[severity] || 'bg-yellow-500';
+            }
+
+            setupEventListeners() {
+                // Initialize charts
+                this.initTrendsChart();
+                this.initResponseChart();
+                this.initHeatmapChart();
+            }
+
+            initTrendsChart() {
+                const chartElement = document.getElementById('trends-chart');
+                if (!chartElement) return;
+
+                const chart = echarts.init(chartElement);
+                const option = {
+                    title: { text: 'Incident Trends', left: 'center' },
+                    tooltip: { trigger: 'axis' },
+                    xAxis: { type: 'category', data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
+                    yAxis: { type: 'value' },
+                    series: [{
+                        data: [12, 19, 3, 5, 2, 3, 9],
+                        type: 'line',
+                        smooth: true,
+                        itemStyle: { color: '#3b82f6' }
+                    }]
+                };
+                chart.setOption(option);
+            }
+
+            initResponseChart() {
+                const chartElement = document.getElementById('response-chart');
+                if (!chartElement) return;
+
+                const chart = echarts.init(chartElement);
+                const option = {
+                    title: { text: 'Response Time Distribution', left: 'center' },
+                    tooltip: { trigger: 'item' },
+                    series: [{
+                        type: 'pie',
+                        radius: '50%',
+                        data: [
+                            { value: 35, name: '< 5 min' },
+                            { value: 25, name: '5-15 min' },
+                            { value: 20, name: '15-30 min' },
+                            { value: 20, name: '> 30 min' }
+                        ]
+                    }]
+                };
+                chart.setOption(option);
+            }
+
+            initHeatmapChart() {
+                const chartElement = document.getElementById('heatmap-chart');
+                if (!chartElement) return;
+
+                const chart = echarts.init(chartElement);
+                const data = [];
+                for (let i = 0; i < 7; i++) {
+                    for (let j = 0; j < 24; j++) {
+                        data.push([j, i, Math.floor(Math.random() * 10)]);
+                    }
+                }
+                
+                const option = {
+                    tooltip: { position: 'top' },
+                    grid: { height: '50%', top: '10%' },
+                    xAxis: { type: 'category', data: Array.from({length: 24}, (_, i) => i + ':00') },
+                    yAxis: { type: 'category', data: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] },
+                    visualMap: {
+                        min: 0, max: 10, calculable: true, orient: 'horizontal',
+                        left: 'center', bottom: '15%',
+                        inRange: { color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffcc', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'] }
+                    },
+                    series: [{
+                        name: 'Incident Density',
+                        type: 'heatmap',
+                        data: data
+                    }]
+                };
+                chart.setOption(option);
+            }
+        }
+
+        function formatTime(timestamp) {
+            const now = new Date();
+            const diff = now - new Date(timestamp);
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(minutes / 60);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return new Date(timestamp).toLocaleDateString();
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-20 right-4 p-4 rounded-lg shadow-lg z-50 ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            } text-white`;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            anime({
+                targets: notification,
+                translateX: [300, 0],
+                opacity: [0, 1],
+                duration: 300,
+                easing: 'easeOutQuad'
+            });
+
+            setTimeout(() => {
+                anime({
+                    targets: notification,
+                    translateX: [0, 300],
+                    opacity: [1, 0],
+                    duration: 300,
+                    easing: 'easeInQuad',
+                    complete: () => {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }
+                });
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

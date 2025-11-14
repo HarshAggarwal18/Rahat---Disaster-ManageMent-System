@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disaster Response System - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a2332 0%, #2c3e50 100%);
+        }
+        
+        .auth-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 1px solid #e9ecef;
+            backdrop-filter: blur(10px);
+        }
+        
+        .floating-shapes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+        
+        .shape {
+            position: absolute;
+            opacity: 0.1;
+            animation: float 8s ease-in-out infinite;
+        }
+        
+        .shape:nth-child(1) { top: 20%; left: 10%; animation-delay: 0s; }
+        .shape:nth-child(2) { top: 60%; left: 80%; animation-delay: 2s; }
+        .shape:nth-child(3) { top: 80%; left: 20%; animation-delay: 4s; }
+        .shape:nth-child(4) { top: 30%; left: 70%; animation-delay: 6s; }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-30px) rotate(180deg); }
+        }
+        
+        .form-input {
+            transition: all 0.3s ease;
+        }
+        
+        .form-input:focus {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.1);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+        }
+        
+        .role-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .role-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            border-color: #3b82f6;
+        }
+        
+        .role-card.selected {
+            border-color: #3b82f6;
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        }
+        
+        .signup-form {
+            display: none;
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen flex items-center justify-center relative">
+    <div class="floating-shapes">
+        <div class="shape w-16 h-16 bg-orange-400 rounded-full"></div>
+        <div class="shape w-12 h-12 bg-red-400 rounded-lg"></div>
+        <div class="shape w-20 h-20 bg-yellow-400 rounded-full"></div>
+        <div class="shape w-14 h-14 bg-blue-400 rounded-lg"></div>
+    </div>
+
+    <div class="auth-card rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4 relative z-10">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">DisasterResponse</h1>
+            <p class="text-gray-600">Emergency Management System</p>
+        </div>
+
+        <!-- Login/Signup Toggle -->
+        <div class="flex mb-6 bg-gray-100 rounded-lg p-1">
+            <button id="login-tab" class="flex-1 py-2 px-4 rounded-md bg-blue-600 text-white font-medium transition-colors">
+                Login
+            </button>
+            <button id="signup-tab" class="flex-1 py-2 px-4 rounded-md text-gray-600 font-medium transition-colors">
+                Sign Up
+            </button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="login-form" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="email" id="login-email" class="form-input w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter your email" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input type="password" id="login-password" class="form-input w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter your password" required>
+            </div>
+            <button type="submit" class="w-full btn-primary text-white py-3 px-4 rounded-lg font-medium">
+                Login
+            </button>
+        </form>
+
+        <!-- Signup Form -->
+        <form id="signup-form" class="signup-form space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                    <input type="text" id="signup-firstname" class="form-input w-full p-3 border border-gray-300 rounded-lg" placeholder="First name" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                    <input type="text" id="signup-lastname" class="form-input w-full p-3 border border-gray-300 rounded-lg" placeholder="Last name" required>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="email" id="signup-email" class="form-input w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter your email" required>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input type="password" id="signup-password" class="form-input w-full p-3 border border-gray-300 rounded-lg" placeholder="Enter your password" required>
+            </div>
+            
+            <!-- Role Selection for Signup -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">I want to register as:</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <label class="flex items-center p-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-blue-50">
+                        <input type="radio" name="role" value="user" class="mr-2" checked>
+                        <span class="text-sm">👤 User</span>
+                    </label>
+                    <label class="flex items-center p-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-blue-50">
+                        <input type="radio" name="role" value="volunteer" class="mr-2">
+                        <span class="text-sm">🚑 Volunteer</span>
+                    </label>
+                    <label class="flex items-center p-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-blue-50">
+                        <input type="radio" name="role" value="admin" class="mr-2">
+                        <span class="text-sm">👨‍💼 Admin</span>
+                    </label>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full btn-primary text-white py-3 px-4 rounded-lg font-medium">
+                Sign Up
+            </button>
+        </form>
+
+        <!-- Demo Credentials Info -->
+        <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 class="text-sm font-semibold text-blue-800 mb-2">📝 Demo Access</h3>
+            <p class="text-xs text-blue-700 mb-2">Use any credentials to login - this is a demo system</p>
+            <div class="text-xs text-blue-600 space-y-1">
+                <div><strong>User:</strong> Reports incidents, tracks own incidents</div>
+                <div><strong>Volunteer:</strong> Takes assigned incidents, completes tasks</div>
+                <div><strong>Admin:</strong> Verifies incidents, manages system</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            setupAuthEventListeners();
+            initializeDemoData();
+        });
+
+        function setupAuthEventListeners() {
+            // Tab switching
+            document.getElementById('login-tab').addEventListener('click', function() {
+                showLoginForm();
+            });
+
+            document.getElementById('signup-tab').addEventListener('click', function() {
+                showSignupForm();
+            });
+
+            // Form submissions
+            document.getElementById('login-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                handleLogin();
+            });
+
+            document.getElementById('signup-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                handleSignup();
+            });
+        }
+
+        function showLoginForm() {
+            document.getElementById('login-tab').className = 'flex-1 py-2 px-4 rounded-md bg-blue-600 text-white font-medium transition-colors';
+            document.getElementById('signup-tab').className = 'flex-1 py-2 px-4 rounded-md text-gray-600 font-medium transition-colors';
+            
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('signup-form').style.display = 'none';
+        }
+
+        function showSignupForm() {
+            document.getElementById('signup-tab').className = 'flex-1 py-2 px-4 rounded-md bg-blue-600 text-white font-medium transition-colors';
+            document.getElementById('login-tab').className = 'flex-1 py-2 px-4 rounded-md text-gray-600 font-medium transition-colors';
+            
+            document.getElementById('signup-form').style.display = 'block';
+            document.getElementById('login-form').style.display = 'none';
+        }
+
+        function handleLogin() {
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+
+            if (!email || !password) {
+                showNotification('Please fill in all fields', 'error');
+                return;
+            }
+
+            // In a real system, this would validate against a database
+            // For demo purposes, we'll create a mock user session
+            const users = JSON.parse(localStorage.getItem('disaster_response_users') || '[]');
+            const user = users.find(u => u.email === email);
+
+            if (user) {
+                // Existing user login
+                loginUser(user);
+            } else {
+                // New demo user - create session
+                const demoUser = {
+                    id: generateUserId(),
+                    firstName: 'Demo',
+                    lastName: 'User',
+                    email: email,
+                    role: 'user', // Default role for new logins
+                    loginTime: new Date().toISOString()
+                };
+                
+                users.push(demoUser);
+                localStorage.setItem('disaster_response_users', JSON.stringify(users));
+                loginUser(demoUser);
+            }
+        }
+
+        function handleSignup() {
+            const firstName = document.getElementById('signup-firstname').value.trim();
+            const lastName = document.getElementById('signup-lastname').value.trim();
+            const email = document.getElementById('signup-email').value.trim();
+            const password = document.getElementById('signup-password').value;
+            const role = document.querySelector('input[name="role"]:checked').value;
+
+            if (!firstName || !lastName || !email || !password) {
+                showNotification('Please fill in all fields', 'error');
+                return;
+            }
+
+            // Check if user already exists
+            const users = JSON.parse(localStorage.getItem('disaster_response_users') || '[]');
+            if (users.find(u => u.email === email)) {
+                showNotification('Email already registered', 'error');
+                return;
+            }
+
+            // Create new user
+            const newUser = {
+                id: generateUserId(),
+                firstName: firstName,
+                lastName: lastName,
+                email: email,
+                password: password, // In production, this should be hashed
+                role: role,
+                signupDate: new Date().toISOString(),
+                loginTime: new Date().toISOString()
+            };
+
+            users.push(newUser);
+            localStorage.setItem('disaster_response_users', JSON.stringify(users));
+
+            showNotification(`Welcome ${firstName}! Account created successfully.`, 'success');
+            
+            setTimeout(() => {
+                loginUser(newUser);
+            }, 1500);
+        }
+
+        function loginUser(user) {
+            // Create session
+            const session = {
+                ...user,
+                loginTime: new Date().toISOString()
+            };
+
+            localStorage.setItem('disaster_response_session', JSON.stringify(session));
+
+            showNotification(`Welcome ${user.firstName}! Redirecting to dashboard...`, 'success');
+            
+            setTimeout(() => {
+                // Redirect based on role
+                switch (user.role) {
+                    case 'admin':
+                        window.location.href = 'admin.html';
+                        break;
+                    case 'volunteer':
+                        window.location.href = 'volunteers.html';
+                        break;
+                    case 'user':
+                        window.location.href = 'user.html';
+                        break;
+                    default:
+                        window.location.href = 'index.html';
+                }
+            }, 1500);
+        }
+
+        function generateUserId() {
+            return 'USER-' + Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+
+        function showNotification(message, type = 'info') {
+            // Remove existing notifications
+            document.querySelectorAll('.notification').forEach(n => n.remove());
+
+            const notification = document.createElement('div');
+            notification.className = `notification fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            } text-white`;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            anime({
+                targets: notification,
+                translateX: [300, 0],
+                opacity: [0, 1],
+                duration: 300,
+                easing: 'easeOutQuad'
+            });
+
+            setTimeout(() => {
+                anime({
+                    targets: notification,
+                    translateX: [0, 300],
+                    opacity: [1, 0],
+                    duration: 300,
+                    easing: 'easeInQuad',
+                    complete: () => {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }
+                });
+            }, 3000);
+        }
+
+        function initializeDemoData() {
+            // Initialize with demo users if not exists
+            if (!localStorage.getItem('disaster_response_users')) {
+                const demoUsers = [
+                    {
+                        id: 'USER-demo-admin',
+                        firstName: 'Admin',
+                        lastName: 'User',
+                        email: 'admin@demo.com',
+                        password: 'demo123',
+                        role: 'admin',
+                        signupDate: new Date().toISOString()
+                    },
+                    {
+                        id: 'USER-demo-volunteer',
+                        firstName: 'Volunteer',
+                        lastName: 'User',
+                        email: 'volunteer@demo.com',
+                        password: 'demo123',
+                        role: 'volunteer',
+                        signupDate: new Date().toISOString()
+                    },
+                    {
+                        id: 'USER-demo-user',
+                        firstName: 'Regular',
+                        lastName: 'User',
+                        email: 'user@demo.com',
+                        password: 'demo123',
+                        role: 'user',
+                        signupDate: new Date().toISOString()
+                    }
+                ];
+                localStorage.setItem('disaster_response_users', JSON.stringify(demoUsers));
+            }
+
+            // Initialize demo incidents and volunteers if not exists
+            if (!localStorage.getItem('disaster_response_incidents')) {
+                const demoIncidents = [
+                    {
+                        id: 'INC-2025-001',
+                        type: 'fire',
+                        severity: 5,
+                        status: 'unverified',
+                        location: { lat: 40.7589, lng: -73.9851 },
+                        description: 'High-rise building fire in Manhattan',
+                        timestamp: new Date(),
+                        reporter: 'John Smith',
+                        reporterId: 'USER-demo-user',
+                        assignedVolunteers: [],
+                        resources: [],
+                        resolvedAt: null,
+                        assignedTo: null,
+                        verified: false
+                    },
+                    {
+                        id: 'INC-2025-002',
+                        type: 'medical',
+                        severity: 3,
+                        status: 'available',
+                        location: { lat: 40.7505, lng: -73.9934 },
+                        description: 'Cardiac emergency at subway station',
+                        timestamp: new Date(Date.now() - 1000 * 60 * 30),
+                        reporter: 'Jane Doe',
+                        reporterId: 'USER-demo-user',
+                        assignedVolunteers: [],
+                        resources: [],
+                        resolvedAt: null,
+                        assignedTo: null,
+                        verified: true
+                    }
+                ];
+                localStorage.setItem('disaster_response_incidents', JSON.stringify(demoIncidents));
+            }
+
+            if (!localStorage.getItem('disaster_response_volunteers')) {
+                const demoVolunteers = [
+                    {
+                        id: 'USER-demo-volunteer',
+                        name: 'Volunteer User',
+                        skills: ['First Aid', 'Fire Response'],
+                        availability: true,
+                        location: { lat: 40.7500, lng: -73.9900 },
+                        contact: 'volunteer@demo.com',
+                        assignedTasks: [],
+                        hoursLogged: 0,
+                        status: 'active',
+                        currentLocation: { lat: 40.7500, lng: -73.9900 }
+                    }
+                ];
+                localStorage.setItem('disaster_response_volunteers', JSON.stringify(demoVolunteers));
+            }
+        }
+    </script>
+</body>
+</html>

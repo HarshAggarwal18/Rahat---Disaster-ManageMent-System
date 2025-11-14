@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - Disaster Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a2332 0%, #2c3e50 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .incident-card {
+            border-left: 4px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .incident-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .status-unverified { border-left-color: #f59e0b; background-color: #fef3c7; }
+        .status-available { border-left-color: #10b981; background-color: #d1fae5; }
+        .status-pending { border-left-color: #3b82f6; background-color: #dbeafe; }
+        .status-completed { border-left-color: #6b7280; background-color: #f3f4f6; }
+        
+        .priority-high { border-left-color: #dc2626; }
+        .priority-medium { border-left-color: #f59e0b; }
+        .priority-low { border-left-color: #10b981; }
+        
+        .user-map {
+            height: 300px;
+            border-radius: 8px;
+        }
+        
+        .form-input {
+            transition: all 0.3s ease;
+        }
+        
+        .form-input:focus {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.1);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+        }
+        
+        .floating-report-btn {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+        
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="gradient-bg shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-white text-xl font-bold">DisasterResponse</h1>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="user.html" class="text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Dashboard</a>
+                        <span id="current-user-display" class="text-gray-300 px-3 py-2 text-sm font-medium"></span>
+                        <button id="logout-btn" class="text-gray-300 hover:text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">User Dashboard</h1>
+            <p class="text-gray-600 mt-2">Report incidents and track your submissions</p>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="card-hover bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Total Reports</p>
+                        <p class="text-3xl font-bold text-gray-900" id="total-reports">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-hover bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Verified Reports</p>
+                        <p class="text-3xl font-bold text-gray-900" id="verified-reports">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-hover bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Pending Verification</p>
+                        <p class="text-3xl font-bold text-gray-900" id="pending-reports">0</p>
+                    </div>
+                    <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Left Column - Report Form & Map -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Quick Report Form -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Report New Incident</h3>
+                    <form id="incident-report-form" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Incident Type</label>
+                                <select id="incident-type" class="form-input w-full p-3 border border-gray-300 rounded-lg" required>
+                                    <option value="">Select Type</option>
+                                    <option value="fire">🔥 Fire</option>
+                                    <option value="medical">🏥 Medical Emergency</option>
+                                    <option value="flood">🌊 Flooding</option>
+                                    <option value="accident">🚗 Traffic Accident</option>
+                                    <option value="earthquake">🌍 Earthquake</option>
+                                    <option value="crime">🚔 Crime</option>
+                                    <option value="other">❓ Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Severity Level</label>
+                                <select id="incident-severity" class="form-input w-full p-3 border border-gray-300 rounded-lg" required>
+                                    <option value="">Select Severity</option>
+                                    <option value="1">🟢 Low</option>
+                                    <option value="2">🟡 Medium</option>
+                                    <option value="3">🟠 High</option>
+                                    <option value="4">🔴 Critical</option>
+                                    <option value="5">🟣 Emergency</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea id="incident-description" rows="4" class="form-input w-full p-3 border border-gray-300 rounded-lg" placeholder="Describe the incident in detail..." required></textarea>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                            <div class="flex space-x-2">
+                                <input type="text" id="incident-location" class="form-input flex-1 p-3 border border-gray-300 rounded-lg" placeholder="Enter location or use GPS" readonly>
+                                <button type="button" id="use-gps-btn" class="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors">
+                                    📍 GPS
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="flex space-x-3">
+                            <button type="submit" class="flex-1 btn-primary text-white py-3 px-4 rounded-lg font-medium">
+                                🚨 Report Incident
+                            </button>
+                            <button type="button" id="clear-form" class="bg-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-400 transition-colors">
+                                Clear
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Map -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Incident Locations</h3>
+                    <div id="user-map" class="user-map"></div>
+                    <p class="text-sm text-gray-600 mt-2">📍 Click on the map to set incident location</p>
+                </div>
+            </div>
+
+            <!-- Right Column - My Reports -->
+            <div class="space-y-6">
+                <!-- My Reports -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">My Reports</h3>
+                        <button id="refresh-reports" class="text-blue-600 hover:text-blue-800 text-sm">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                    <div id="my-reports" class="space-y-3 max-h-96 overflow-y-auto">
+                        <!-- Reports will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="bg-white rounded-lg shadow-sm p-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                    <div class="space-y-2">
+                        <button id="emergency-contact" class="w-full text-left p-3 text-sm text-gray-600 hover:bg-gray-50 rounded border">
+                            📞 Emergency Contacts
+                        </button>
+                        <button id="safety-tips" class="w-full text-left p-3 text-sm text-gray-600 hover:bg-gray-50 rounded border">
+                            🛡️ Safety Guidelines
+                        </button>
+                        <button id="nearby-hospitals" class="w-full text-left p-3 text-sm text-gray-600 hover:bg-gray-50 rounded border">
+                            🏥 Nearby Hospitals
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Report Button -->
+    <button class="floating-report-btn bg-red-600 hover:bg-red-700 text-white p-4 rounded-full shadow-lg" onclick="scrollToReport()">
+        🚨
+    </button>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="modal">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Report Submitted!</h3>
+                <p class="text-gray-600 mb-4">Your incident report has been submitted for verification. You will be notified once it's verified.</p>
+                <button onclick="closeSuccessModal()" class="bg-blue-600 text-white py-2 px-6 rounded-lg hover:bg-blue-700">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let userMap;
+        let selectedLocation = null;
+        let currentUser = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeUserDashboard();
+        });
+
+        function initializeUserDashboard() {
+            // Check authentication
+            const session = localStorage.getItem('disaster_response_session');
+            if (!session) {
+                window.location.href = 'auth.html';
+                return;
+            }
+
+            currentUser = JSON.parse(session);
+            
+            // Update user display
+            document.getElementById('current-user-display').textContent = 
+                `${currentUser.firstName} ${currentUser.lastName} (${currentUser.role})`;
+
+            // Initialize map
+            initializeUserMap();
+            
+            // Load user's reports
+            loadUserReports();
+            
+            // Setup event listeners
+            setupUserEventListeners();
+        }
+
+        function initializeUserMap() {
+            userMap = L.map('user-map').setView([40.7128, -74.0060], 12);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(userMap);
+
+            // Add click handler for location selection
+            userMap.on('click', function(e) {
+                selectLocation(e.latlng);
+            });
+
+            // Load existing incidents on map
+            loadIncidentsOnMap();
+        }
+
+        function selectLocation(latlng) {
+            selectedLocation = {
+                lat: latlng.lat,
+                lng: latlng.lng
+            };
+            
+            // Update location input
+            document.getElementById('incident-location').value = 
+                `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
+            
+            // Clear previous markers
+            userMap.eachLayer(layer => {
+                if (layer instanceof L.Marker) {
+                    userMap.removeLayer(layer);
+                }
+            });
+            
+            // Add new marker
+            L.marker([latlng.lat, latlng.lng]).addTo(userMap)
+                .bindPopup('Incident Location')
+                .openPopup();
+        }
+
+        function loadIncidentsOnMap() {
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            
+            incidents.forEach(incident => {
+                if (incident.verified) {
+                    const color = incident.severity === 5 ? '#8e44ad' : 
+                                 incident.severity === 4 ? '#e74c3c' : 
+                                 incident.severity === 3 ? '#e67e22' : 
+                                 incident.severity === 2 ? '#f39c12' : '#27ae60';
+                    
+                    const marker = L.circleMarker([incident.location.lat, incident.location.lng], {
+                        radius: 6,
+                        fillColor: color,
+                        color: '#ffffff',
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    }).addTo(userMap);
+
+                    const popupContent = `
+                        <div class="p-2">
+                            <h4 class="font-semibold text-sm">${incident.id}</h4>
+                            <p class="text-xs text-gray-600">${incident.type.toUpperCase()}</p>
+                            <p class="text-xs mt-1">${incident.description}</p>
+                            <p class="text-xs text-gray-500">Status: ${incident.status}</p>
+                        </div>
+                    `;
+                    marker.bindPopup(popupContent);
+                }
+            });
+        }
+
+        function loadUserReports() {
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            const userReports = incidents.filter(incident => incident.reporterId === currentUser.id);
+            
+            // Update statistics
+            document.getElementById('total-reports').textContent = userReports.length;
+            document.getElementById('verified-reports').textContent = userReports.filter(r => r.verified).length;
+            document.getElementById('pending-reports').textContent = userReports.filter(r => !r.verified).length;
+            
+            // Populate reports list
+            const reportsContainer = document.getElementById('my-reports');
+            
+            if (userReports.length === 0) {
+                reportsContainer.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <p>No reports yet</p>
+                        <p class="text-sm mt-1">Use the form to report your first incident</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            reportsContainer.innerHTML = userReports.map(report => createReportCard(report)).join('');
+        }
+
+        function createReportCard(report) {
+            const statusClass = report.verified ? 
+                (report.status === 'available' ? 'status-available' : 
+                 report.status === 'pending' ? 'status-pending' : 'status-completed') : 
+                'status-unverified';
+            
+            const priorityClass = report.severity >= 4 ? 'priority-high' : 
+                                 report.severity >= 3 ? 'priority-medium' : 'priority-low';
+            
+            const statusColor = report.severity === 5 ? 'bg-purple-500' : 
+                               report.severity === 4 ? 'bg-red-500' : 
+                               report.severity === 3 ? 'bg-orange-500' : 
+                               report.severity === 2 ? 'bg-yellow-500' : 'bg-green-500';
+            
+            return `
+                <div class="incident-card ${priorityClass} bg-white p-4 rounded-lg shadow-sm border">
+                    <div class="flex items-start justify-between mb-2">
+                        <span class="text-xs font-medium px-2 py-1 rounded ${statusColor} text-white">
+                            ${report.type.toUpperCase()}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded ${statusClass} text-xs font-medium">
+                            ${report.verified ? report.status.toUpperCase() : 'UNVERIFIED'}
+                        </span>
+                    </div>
+                    <h4 class="font-medium text-gray-900 mb-2">${report.description}</h4>
+                    <div class="text-xs text-gray-600 space-y-1">
+                        <p>📍 ${report.location.lat.toFixed(4)}, ${report.location.lng.toFixed(4)}</p>
+                        <p>⏰ ${formatTime(report.timestamp)}</p>
+                        <p class="text-gray-500">ID: ${report.id}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setupUserEventListeners() {
+            // GPS location button
+            document.getElementById('use-gps-btn').addEventListener('click', getCurrentLocation);
+            
+            // Form submission
+            document.getElementById('incident-report-form').addEventListener('submit', submitIncidentReport);
+            
+            // Clear form
+            document.getElementById('clear-form').addEventListener('click', clearForm);
+            
+            // Refresh reports
+            document.getElementById('refresh-reports').addEventListener('click', loadUserReports);
+            
+            // Quick actions
+            document.getElementById('emergency-contact').addEventListener('click', () => {
+                showNotification('Emergency: 911 | Non-Emergency: 311', 'info');
+            });
+            
+            document.getElementById('safety-tips').addEventListener('click', () => {
+                showNotification('Stay calm, assess the situation, ensure your safety first', 'info');
+            });
+            
+            document.getElementById('nearby-hospitals').addEventListener('click', () => {
+                showNotification('Hospitals will be shown on map', 'info');
+                // Could add hospital markers to map here
+            });
+            
+            // Logout
+            document.getElementById('logout-btn').addEventListener('click', function() {
+                localStorage.removeItem('disaster_response_session');
+                window.location.href = 'auth.html';
+            });
+        }
+
+        function getCurrentLocation() {
+            if (!navigator.geolocation) {
+                showNotification('Geolocation is not supported by this browser', 'error');
+                return;
+            }
+
+            const gpsBtn = document.getElementById('use-gps-btn');
+            gpsBtn.disabled = true;
+            gpsBtn.innerHTML = '📍 Getting location...';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    selectedLocation = { lat, lng };
+                    
+                    document.getElementById('incident-location').value = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                    
+                    // Update map
+                    userMap.setView([lat, lng], 15);
+                    selectLocation({ lat, lng });
+                    
+                    gpsBtn.innerHTML = '📍 Location Captured';
+                    gpsBtn.className = 'bg-green-700 text-white px-4 py-3 rounded-lg cursor-not-allowed';
+                    
+                    showNotification('Location captured successfully!', 'success');
+                },
+                (error) => {
+                    gpsBtn.disabled = false;
+                    gpsBtn.innerHTML = '📍 GPS';
+                    gpsBtn.className = 'bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors';
+                    
+                    let errorMessage = 'Unable to get your location';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Location permission denied';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location information unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out';
+                            break;
+                    }
+                    showNotification(errorMessage, 'error');
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 300000
+                }
+            );
+        }
+
+        function submitIncidentReport(e) {
+            e.preventDefault();
+            
+            const type = document.getElementById('incident-type').value;
+            const severity = parseInt(document.getElementById('incident-severity').value);
+            const description = document.getElementById('incident-description').value.trim();
+            
+            if (!type || !severity || !description) {
+                showNotification('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            if (!selectedLocation) {
+                showNotification('Please select a location on the map or use GPS', 'error');
+                return;
+            }
+            
+            // Create new incident
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            const newIncident = {
+                id: `INC-${Date.now()}`,
+                type: type,
+                severity: severity,
+                status: 'unverified',
+                location: selectedLocation,
+                description: description,
+                timestamp: new Date(),
+                reporter: `${currentUser.firstName} ${currentUser.lastName}`,
+                reporterId: currentUser.id,
+                assignedVolunteers: [],
+                resources: [],
+                resolvedAt: null,
+                assignedTo: null,
+                verified: false
+            };
+            
+            incidents.unshift(newIncident);
+            localStorage.setItem('disaster_response_incidents', JSON.stringify(incidents));
+            
+            // Show success modal
+            showSuccessModal();
+            
+            // Clear form
+            clearForm();
+            
+            // Refresh reports
+            loadUserReports();
+            
+            // Update map
+            loadIncidentsOnMap();
+        }
+
+        function clearForm() {
+            document.getElementById('incident-report-form').reset();
+            document.getElementById('incident-location').value = '';
+            selectedLocation = null;
+            
+            // Clear map markers
+            userMap.eachLayer(layer => {
+                if (layer instanceof L.Marker) {
+                    userMap.removeLayer(layer);
+                }
+            });
+            
+            // Reset GPS button
+            const gpsBtn = document.getElementById('use-gps-btn');
+            gpsBtn.disabled = false;
+            gpsBtn.innerHTML = '📍 GPS';
+            gpsBtn.className = 'bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors';
+        }
+
+        function showSuccessModal() {
+            document.getElementById('success-modal').classList.add('show');
+        }
+
+        function closeSuccessModal() {
+            document.getElementById('success-modal').classList.remove('show');
+        }
+
+        function scrollToReport() {
+            document.getElementById('incident-report-form').scrollIntoView({ 
+                behavior: 'smooth',
+                block: 'center'
+            });
+        }
+
+        function formatTime(timestamp) {
+            const now = new Date();
+            const diff = now - new Date(timestamp);
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(minutes / 60);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return new Date(timestamp).toLocaleDateString();
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-20 right-4 p-4 rounded-lg shadow-lg z-50 ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            } text-white`;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            anime({
+                targets: notification,
+                translateX: [300, 0],
+                opacity: [0, 1],
+                duration: 300,
+                easing: 'easeOutQuad'
+            });
+
+            setTimeout(() => {
+                anime({
+                    targets: notification,
+                    translateX: [0, 300],
+                    opacity: [1, 0],
+                    duration: 300,
+                    easing: 'easeInQuad',
+                    complete: () => {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }
+                });
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

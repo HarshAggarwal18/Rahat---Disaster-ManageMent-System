@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volunteer Dashboard - Disaster Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet-heat.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a2332 0%, #2c3e50 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .task-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-color: #3b82f6;
+        }
+        
+        .task-card:active {
+            transform: scale(0.98);
+        }
+        
+        .priority-high { border-left: 4px solid #dc2626; }
+        .priority-medium { border-left: 4px solid #f59e0b; }
+        .priority-low { border-left: 4px solid #10b981; }
+        
+        .status-available { background-color: #10b981; }
+        .status-pending { background-color: #3b82f6; }
+        .status-completed { background-color: #6b7280; }
+        .status-unverified { background-color: #f59e0b; }
+        
+        .volunteer-map {
+            height: 400px;
+            border-radius: 8px;
+        }
+        
+        .stats-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .floating-route-btn {
+            position: fixed;
+            bottom: 6rem;
+            right: 2rem;
+            z-index: 1000;
+        }
+        
+        .route-line {
+            color: #3b82f6;
+            weight: 4;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="gradient-bg shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <h1 class="text-white text-xl font-bold">DisasterResponse</h1>
+                    </div>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <a href="index.html" class="text-gray-300 hover:text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Dashboard</a>
+                        <a href="volunteers.html" class="text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Volunteers</a>
+                        <span id="current-user-display" class="text-gray-300 px-3 py-2 text-sm font-medium"></span>
+                        <button id="logout-btn" class="text-gray-300 hover:text-orange-300 px-3 py-2 rounded-md text-sm font-medium transition-colors">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Volunteer Dashboard</h1>
+            <p class="text-gray-600 mt-2">Manage incidents and coordinate response efforts</p>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="stats-card card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Available Tasks</p>
+                        <p class="text-3xl font-bold text-gray-900" id="available-tasks">0</p>
+                        <p class="text-green-600 text-sm mt-1">
+                            <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Ready for pickup</span>
+                        </p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">My Tasks</p>
+                        <p class="text-3xl font-bold text-gray-900" id="my-tasks">0</p>
+                        <p class="text-blue-600 text-sm mt-1">
+                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">In progress</span>
+                        </p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-card card-hover">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-600 text-sm font-medium">Completed</p>
+                        <p class="text-3xl font-bold text-gray-900" id="completed-tasks">0</p>
+                        <p class="text-gray-600 text-sm mt-1">
+                            <span class="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">Total completed</span>
+                        </p>
+                    </div>
+                    <div class="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Management Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Available Incidents -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Available Incidents</h3>
+                    <span id="available-count" class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-sm">0</span>
+                </div>
+                <div id="available-tasks" class="space-y-3 max-h-96 overflow-y-auto">
+                    <div class="text-center text-gray-500 py-8">
+                        <p>No available incidents</p>
+                        <p class="text-sm mt-1">Check back for new verified incidents</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Assigned Tasks -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">My Assigned Tasks</h3>
+                    <span id="assigned-count" class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm">0</span>
+                </div>
+                <div id="assigned-tasks" class="space-y-3 max-h-96 overflow-y-auto">
+                    <div class="text-center text-gray-500 py-8">
+                        <p>No assigned tasks</p>
+                        <p class="text-sm mt-1">Take an available incident to get started</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Completed Tasks -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">Completed Tasks</h3>
+                    <span id="completed-count" class="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-sm">0</span>
+                </div>
+                <div id="completed-tasks-list" class="space-y-3 max-h-96 overflow-y-auto">
+                    <div class="text-center text-gray-500 py-8">
+                        <p>No completed tasks</p>
+                        <p class="text-sm mt-1">Complete your first task to see it here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Section -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Live Incident Map</h3>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-600">📍 Your Location:</span>
+                    <span id="current-location" class="text-sm font-medium text-blue-600">Getting location...</span>
+                    <button id="update-location" class="text-sm bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
+                        📍 Update
+                    </button>
+                </div>
+            </div>
+            <div id="volunteer-map" class="volunteer-map"></div>
+        </div>
+
+        <!-- Volunteer Status -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Current Status -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Volunteer Status</h3>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-700">Current Status:</span>
+                        <span id="volunteer-status" class="status-available px-3 py-1 rounded-full text-white text-sm font-medium">Available</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-700">Tasks Completed:</span>
+                        <span id="tasks-completed" class="font-semibold text-gray-900">0</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-700">Hours Logged:</span>
+                        <span id="hours-logged" class="font-semibold text-gray-900">0h</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-700">Response Time:</span>
+                        <span id="avg-response" class="font-semibold text-gray-900">0 min</span>
+                    </div>
+                </div>
+                <div class="mt-6 space-y-2">
+                    <button id="toggle-status" class="w-full bg-yellow-600 text-white py-2 px-4 rounded-md hover:bg-yellow-700 transition-colors">
+                        Set as Busy
+                    </button>
+                </div>
+            </div>
+
+            <!-- Skills and Quick Actions -->
+            <div class="bg-white rounded-lg shadow-sm p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                <div class="space-y-3">
+                    <button id="refresh-tasks" class="w-full text-left p-3 text-sm text-gray-600 hover:bg-gray-50 rounded border">
+                        🔄 Refresh Tasks
+                    </button>
+                    <button id="emergency-contact" class="w-full text-left p-3 text-sm text-gray-600 hover:bg-gray-50 rounded border">
+                        📞 Emergency Contacts
+                    </button>
+                    <button id="safety-guidelines" class="w-full text-left p-3 text-sm text-gray-600 hover:bg-gray-50 rounded border">
+                        🛡️ Safety Guidelines
+                    </button>
+                    <button id="nearest-hospitals" class="w-full text-left p-3 text-sm text-gray-600 hover:bg-gray-50 rounded border">
+                        🏥 Nearest Hospitals
+                    </button>
+                    <button id="training-materials" class="w-full text-left p-3 text-sm text-gray-600 hover:bg-gray-50 rounded border">
+                        📚 Training Materials
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Route Button -->
+    <button id="show-route-btn" class="floating-route-btn bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-lg" style="display: none;">
+        🗺️ Show Route
+    </button>
+
+    <!-- Incident Detail Modal -->
+    <div id="incident-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold" id="modal-incident-id">Incident Details</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="modal-content">
+                <!-- Modal content will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let volunteerMap;
+        let currentVolunteer = null;
+        let currentLocation = { lat: 40.7128, lng: -74.0060 };
+        let routingControl = null;
+        let selectedIncident = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeVolunteerDashboard();
+        });
+
+        function initializeVolunteerDashboard() {
+            // Check authentication and volunteer role
+            const session = localStorage.getItem('disaster_response_session');
+            if (!session) {
+                window.location.href = 'auth.html';
+                return;
+            }
+
+            currentVolunteer = JSON.parse(session);
+            if (currentVolunteer.role !== 'volunteer') {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            // Update user display
+            document.getElementById('current-user-display').textContent = 
+                `${currentVolunteer.firstName} ${currentVolunteer.lastName} (${currentVolunteer.role})`;
+
+            // Initialize map
+            initializeVolunteerMap();
+            
+            // Load volunteer data
+            loadVolunteerData();
+            
+            // Setup event listeners
+            setupVolunteerEventListeners();
+            
+            // Get current location
+            getCurrentVolunteerLocation();
+        }
+
+        function initializeVolunteerMap() {
+            volunteerMap = L.map('volunteer-map').setView([currentLocation.lat, currentLocation.lng], 12);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(volunteerMap);
+
+            // Add volunteer location marker
+            updateVolunteerLocationMarker();
+            
+            // Load incidents on map
+            loadIncidentsOnMap();
+        }
+
+        function updateVolunteerLocationMarker() {
+            // Clear existing volunteer marker
+            volunteerMap.eachLayer(layer => {
+                if (layer.options && layer.options.isVolunteerMarker) {
+                    volunteerMap.removeLayer(layer);
+                }
+            });
+
+            // Add volunteer marker
+            const volunteerMarker = L.marker([currentLocation.lat, currentLocation.lng], {
+                icon: L.divIcon({
+                    className: 'volunteer-marker',
+                    html: '<div style="background: #3b82f6; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white;">👤</div>',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                }),
+                isVolunteerMarker: true
+            }).addTo(volunteerMap);
+            
+            volunteerMarker.bindPopup('Your Location');
+        }
+
+        function loadIncidentsOnMap() {
+            // Clear existing incident markers
+            volunteerMap.eachLayer(layer => {
+                if (layer.options && layer.options.isIncidentMarker) {
+                    volunteerMap.removeLayer(layer);
+                }
+            });
+
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            const verifiedIncidents = incidents.filter(incident => incident.verified);
+            
+            verifiedIncidents.forEach(incident => {
+                const color = incident.severity === 5 ? '#8e44ad' : 
+                             incident.severity === 4 ? '#e74c3c' : 
+                             incident.severity === 3 ? '#e67e22' : 
+                             incident.severity === 2 ? '#f39c12' : '#27ae60';
+                
+                const marker = L.circleMarker([incident.location.lat, incident.location.lng], {
+                    radius: 8,
+                    fillColor: incident.status === 'available' ? color : 
+                              incident.status === 'pending' ? '#3b82f6' : '#6b7280',
+                    color: '#ffffff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8,
+                    isIncidentMarker: true
+                }).addTo(volunteerMap);
+
+                const popupContent = `
+                    <div class="p-2">
+                        <h4 class="font-semibold text-sm">${incident.id}</h4>
+                        <p class="text-xs text-gray-600">${incident.type.toUpperCase()} - Severity ${incident.severity}</p>
+                        <p class="text-xs mt-1">${incident.description}</p>
+                        <p class="text-xs text-gray-500 mt-1">${formatTime(incident.timestamp)}</p>
+                        <p class="text-xs text-gray-500">Reporter: ${incident.reporter}</p>
+                        <p class="text-xs ${incident.status === 'available' ? 'text-green-600' : 
+                                          incident.status === 'pending' ? 'text-blue-600' : 'text-gray-600'}">
+                            Status: ${incident.status.toUpperCase()}
+                        </p>
+                        ${incident.assignedTo === currentVolunteer.id ? `<p class="text-xs text-blue-500">Assigned to you</p>` : ''}
+                    </div>
+                `;
+
+                marker.bindPopup(popupContent);
+                
+                // Add click handler
+                marker.on('click', () => {
+                    if (incident.status === 'available') {
+                        assignTaskToVolunteer(incident.id);
+                    }
+                });
+            });
+        }
+
+        function loadVolunteerData() {
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            
+            // Filter incidents for volunteer
+            const availableTasks = incidents.filter(i => i.status === 'available' && i.verified);
+            const myTasks = incidents.filter(i => i.assignedTo === currentVolunteer.id && i.status === 'pending');
+            const completedTasks = incidents.filter(i => i.assignedTo === currentVolunteer.id && i.status === 'completed');
+            
+            // Update statistics
+            document.getElementById('available-tasks').textContent = availableTasks.length;
+            document.getElementById('my-tasks').textContent = myTasks.length;
+            document.getElementById('completed-tasks').textContent = completedTasks.length;
+            
+            document.getElementById('available-count').textContent = availableTasks.length;
+            document.getElementById('assigned-count').textContent = myTasks.length;
+            document.getElementById('completed-count').textContent = completedTasks.length;
+            
+            document.getElementById('tasks-completed').textContent = completedTasks.length;
+            document.getElementById('hours-logged').textContent = '24h'; // Mock data
+            document.getElementById('avg-response').textContent = '12 min'; // Mock data
+            
+            // Populate task lists
+            populateTaskList('available-tasks', availableTasks, 'available');
+            populateTaskList('assigned-tasks', myTasks, 'assigned');
+            populateTaskList('completed-tasks-list', completedTasks, 'completed');
+        }
+
+        function populateTaskList(containerId, tasks, type) {
+            const container = document.getElementById(containerId);
+            
+            if (tasks.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-500">
+                        <p>No ${type} incidents</p>
+                        <p class="text-sm mt-1">${getEmptyMessage(type)}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = tasks.map(task => createTaskCard(task, type)).join('');
+        }
+
+        function createTaskCard(task, type) {
+            const priorityClass = task.severity >= 4 ? 'priority-high' : 
+                                 task.severity >= 3 ? 'priority-medium' : 'priority-low';
+            
+            const statusColor = task.severity === 5 ? 'bg-purple-500' : 
+                               task.severity === 4 ? 'bg-red-500' : 
+                               task.severity === 3 ? 'bg-orange-500' : 
+                               task.severity === 2 ? 'bg-yellow-500' : 'bg-green-500';
+            
+            return `
+                <div class="task-card ${priorityClass} bg-white p-4 rounded-lg shadow-sm border" 
+                     data-incident-id="${task.id}" onclick="handleTaskClick('${task.id}', '${type}')">
+                    <div class="flex items-start justify-between mb-2">
+                        <span class="text-xs font-medium px-2 py-1 rounded ${statusColor} text-white">
+                            ${task.type.toUpperCase()}
+                        </span>
+                        <span class="text-xs text-gray-500">${task.id}</span>
+                    </div>
+                    <h4 class="font-medium text-gray-900 mb-2">${task.description}</h4>
+                    <div class="text-xs text-gray-600 space-y-1">
+                        <p>📍 ${task.location.lat.toFixed(4)}, ${task.location.lng.toFixed(4)}</p>
+                        <p>⏰ ${formatTime(task.timestamp)}</p>
+                        <p>👤 ${task.reporter}</p>
+                        ${type === 'assigned' ? `<p class="text-blue-600">Assigned to you</p>` : ''}
+                        ${type === 'completed' && task.resolvedAt ? `<p class="text-green-600">Completed ${formatTime(task.resolvedAt)}</p>` : ''}
+                    </div>
+                    ${type === 'available' ? `
+                        <div class="mt-3">
+                            <button onclick="event.stopPropagation(); assignTaskToVolunteer('${task.id}')" class="w-full bg-blue-600 text-white py-2 px-3 rounded text-sm hover:bg-blue-700">
+                                Take Task
+                            </button>
+                        </div>
+                    ` : type === 'assigned' ? `
+                        <div class="mt-3 flex space-x-2">
+                            <button onclick="event.stopPropagation(); completeTask('${task.id}')" class="flex-1 bg-green-600 text-white py-2 px-3 rounded text-sm hover:bg-green-700">
+                                Mark Complete
+                            </button>
+                            <button onclick="event.stopPropagation(); releaseTask('${task.id}')" class="flex-1 bg-gray-600 text-white py-2 px-3 rounded text-sm hover:bg-gray-700">
+                                Release
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function handleTaskClick(incidentId, type) {
+            if (type === 'available') {
+                assignTaskToVolunteer(incidentId);
+            } else {
+                showIncidentDetails(incidentId);
+            }
+        }
+
+        function assignTaskToVolunteer(incidentId) {
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            const incident = incidents.find(i => i.id === incidentId);
+            
+            if (incident && incident.status === 'available') {
+                incident.status = 'pending';
+                incident.assignedTo = currentVolunteer.id;
+                incident.assignedAt = new Date();
+                
+                localStorage.setItem('disaster_response_incidents', JSON.stringify(incidents));
+                
+                showNotification(`Task ${incidentId} assigned to you!`, 'success');
+                
+                // Show route button
+                selectedIncident = incident;
+                document.getElementById('show-route-btn').style.display = 'block';
+                
+                // Refresh data
+                loadVolunteerData();
+                loadIncidentsOnMap();
+                
+                // Show route
+                showRouteToIncident();
+            }
+        }
+
+        function completeTask(incidentId) {
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            const incident = incidents.find(i => i.id === incidentId && i.assignedTo === currentVolunteer.id);
+            
+            if (incident) {
+                incident.status = 'completed';
+                incident.resolvedAt = new Date();
+                
+                localStorage.setItem('disaster_response_incidents', JSON.stringify(incidents));
+                
+                showNotification(`Task ${incidentId} marked as completed!`, 'success');
+                
+                // Hide route button
+                document.getElementById('show-route-btn').style.display = 'none';
+                
+                // Clear route if exists
+                if (routingControl) {
+                    volunteerMap.removeControl(routingControl);
+                    routingControl = null;
+                }
+                
+                // Refresh data
+                loadVolunteerData();
+                loadIncidentsOnMap();
+            }
+        }
+
+        function releaseTask(incidentId) {
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            const incident = incidents.find(i => i.id === incidentId && i.assignedTo === currentVolunteer.id);
+            
+            if (incident) {
+                incident.status = 'available';
+                incident.assignedTo = null;
+                delete incident.assignedAt;
+                
+                localStorage.setItem('disaster_response_incidents', JSON.stringify(incidents));
+                
+                showNotification(`Task ${incidentId} released back to available pool`, 'info');
+                
+                // Hide route button
+                document.getElementById('show-route-btn').style.display = 'none';
+                
+                // Clear route if exists
+                if (routingControl) {
+                    volunteerMap.removeControl(routingControl);
+                    routingControl = null;
+                }
+                
+                // Refresh data
+                loadVolunteerData();
+                loadIncidentsOnMap();
+            }
+        }
+
+        function showRouteToIncident() {
+            if (!selectedIncident || !currentLocation) return;
+            
+            // Clear existing route
+            if (routingControl) {
+                volunteerMap.removeControl(routingControl);
+            }
+            
+            // Add new route
+            routingControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(currentLocation.lat, currentLocation.lng),
+                    L.latLng(selectedIncident.location.lat, selectedIncident.location.lng)
+                ],
+                lineOptions: {
+                    styles: [{ color: '#3b82f6', weight: 4, opacity: 0.7 }]
+                },
+                draggableWaypoints: false,
+                addWaypoints: false,
+                fitSelectedRoutes: true,
+                showAlternatives: false,
+                createMarker: function() { return null; }
+            }).addTo(volunteerMap);
+        }
+
+        function getCurrentVolunteerLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        currentLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        
+                        document.getElementById('current-location').textContent = 
+                            `${currentLocation.lat.toFixed(4)}, ${currentLocation.lng.toFixed(4)}`;
+                        
+                        // Update map center and marker
+                        volunteerMap.setView([currentLocation.lat, currentLocation.lng], 13);
+                        updateVolunteerLocationMarker();
+                        
+                        showNotification('Location updated successfully!', 'success');
+                    },
+                    (error) => {
+                        showNotification('Unable to get your location', 'error');
+                    }
+                );
+            }
+        }
+
+        function setupVolunteerEventListeners() {
+            // Status toggle
+            document.getElementById('toggle-status').addEventListener('click', toggleVolunteerStatus);
+            
+            // Update location
+            document.getElementById('update-location').addEventListener('click', getCurrentVolunteerLocation);
+            
+            // Show route button
+            document.getElementById('show-route-btn').addEventListener('click', showRouteToIncident);
+            
+            // Refresh tasks
+            document.getElementById('refresh-tasks').addEventListener('click', loadVolunteerData);
+            
+            // Quick actions
+            document.getElementById('emergency-contact').addEventListener('click', () => {
+                showNotification('Emergency: 911 | Non-Emergency: 311', 'info');
+            });
+            
+            document.getElementById('safety-guidelines').addEventListener('click', () => {
+                showNotification('Always prioritize safety. Assess risks before approaching incident.', 'info');
+            });
+            
+            document.getElementById('nearest-hospitals').addEventListener('click', () => {
+                showNotification('Hospitals will be shown on map', 'info');
+                // Could add hospital markers to map here
+            });
+            
+            document.getElementById('training-materials').addEventListener('click', () => {
+                showNotification('Training materials available in admin panel', 'info');
+            });
+            
+            // Modal close
+            document.getElementById('close-modal').addEventListener('click', function() {
+                document.getElementById('incident-modal').classList.add('hidden');
+                document.getElementById('incident-modal').classList.remove('flex');
+            });
+            
+            // Logout
+            document.getElementById('logout-btn').addEventListener('click', function() {
+                localStorage.removeItem('disaster_response_session');
+                window.location.href = 'auth.html';
+            });
+        }
+
+        function toggleVolunteerStatus() {
+            const statusBtn = document.getElementById('toggle-status');
+            const statusDisplay = document.getElementById('volunteer-status');
+            
+            if (statusBtn.textContent === 'Set as Busy') {
+                statusBtn.textContent = 'Set as Available';
+                statusBtn.className = 'w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition-colors';
+                statusDisplay.textContent = 'Busy';
+                statusDisplay.className = 'status-pending px-3 py-1 rounded-full text-white text-sm font-medium';
+                showNotification('Status changed to Busy - you won\'t receive new assignments', 'info');
+            } else {
+                statusBtn.textContent = 'Set as Busy';
+                statusBtn.className = 'w-full bg-yellow-600 text-white py-2 px-4 rounded-md hover:bg-yellow-700 transition-colors';
+                statusDisplay.textContent = 'Available';
+                statusDisplay.className = 'status-available px-3 py-1 rounded-full text-white text-sm font-medium';
+                showNotification('Status changed to Available - you can receive new assignments', 'success');
+            }
+        }
+
+        function showIncidentDetails(incidentId) {
+            const incidents = JSON.parse(localStorage.getItem('disaster_response_incidents') || '[]');
+            const incident = incidents.find(i => i.id === incidentId);
+            
+            if (!incident) return;
+            
+            document.getElementById('modal-incident-id').textContent = `${incident.id} - Incident Details`;
+            
+            const modalContent = document.getElementById('modal-content');
+            modalContent.innerHTML = `
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">Basic Information</h4>
+                            <div class="space-y-2 text-sm">
+                                <div><span class="font-medium">ID:</span> ${incident.id}</div>
+                                <div><span class="font-medium">Type:</span> ${incident.type.toUpperCase()}</div>
+                                <div><span class="font-medium">Severity:</span> ${getSeverityText(incident.severity)}</div>
+                                <div><span class="font-medium">Status:</span> ${incident.status.toUpperCase()}</div>
+                                <div><span class="font-medium">Reporter:</span> ${incident.reporter}</div>
+                                <div><span class="font-medium">Time:</span> ${formatTime(incident.timestamp)}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">Location</h4>
+                            <div class="space-y-2 text-sm">
+                                <div><span class="font-medium">Latitude:</span> ${incident.location.lat.toFixed(6)}</div>
+                                <div><span class="font-medium">Longitude:</span> ${incident.location.lng.toFixed(6)}</div>
+                                <div id="incident-map-preview" style="height: 150px; border-radius: 4px;" class="mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h4 class="font-medium text-gray-900 mb-2">Description</h4>
+                        <p class="text-sm text-gray-700">${incident.description}</p>
+                    </div>
+                    
+                    ${incident.assignedTo === currentVolunteer.id ? `
+                        <div class="bg-blue-50 p-3 rounded-lg">
+                            <h4 class="font-medium text-blue-800 mb-1">Assignment Info</h4>
+                            <p class="text-sm text-blue-700">This task is assigned to you</p>
+                            ${incident.assignedAt ? `<p class="text-sm text-blue-700">Assigned at: ${formatTime(incident.assignedAt)}</p>` : ''}
+                        </div>
+                    ` : incident.assignedTo ? `
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <h4 class="font-medium text-gray-800 mb-1">Assignment Info</h4>
+                            <p class="text-sm text-gray-700">Assigned to: ${incident.assignedTo}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${incident.status === 'pending' && incident.assignedTo === currentVolunteer.id ? `
+                        <div class="flex space-x-3 pt-4 border-t">
+                            <button onclick="completeTask('${incident.id}'); closeIncidentModal();" class="flex-1 bg-green-600 text-white py-2 px-4 rounded hover:bg-green-700">
+                                Mark Complete
+                            </button>
+                            <button onclick="releaseTask('${incident.id}'); closeIncidentModal();" class="flex-1 bg-gray-600 text-white py-2 px-4 rounded hover:bg-gray-700">
+                                Release Task
+                            </button>
+                            <button onclick="closeIncidentModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+                                Close
+                            </button>
+                        </div>
+                    ` : `
+                        <div class="flex space-x-3 pt-4 border-t">
+                            <button onclick="closeIncidentModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">
+                                Close
+                            </button>
+                        </div>
+                    `}
+                </div>
+            `;
+            
+            // Initialize mini map
+            setTimeout(() => {
+                const mapPreview = L.map('incident-map-preview').setView([incident.location.lat, incident.location.lng], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(mapPreview);
+                
+                L.marker([incident.location.lat, incident.location.lng]).addTo(mapPreview);
+                
+                // Add volunteer location if assigned
+                if (incident.assignedTo === currentVolunteer.id) {
+                    L.marker([currentLocation.lat, currentLocation.lng], {
+                        icon: L.divIcon({
+                            className: 'volunteer-marker',
+                            html: '<div style="background: #3b82f6; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold;">👤</div>',
+                            iconSize: [20, 20],
+                            iconAnchor: [10, 10]
+                        })
+                    }).addTo(mapPreview);
+                }
+            }, 100);
+            
+            document.getElementById('incident-modal').classList.remove('hidden');
+            document.getElementById('incident-modal').classList.add('flex');
+        }
+
+        function closeIncidentModal() {
+            document.getElementById('incident-modal').classList.add('hidden');
+            document.getElementById('incident-modal').classList.remove('flex');
+        }
+
+        function getEmptyMessage(type) {
+            const messages = {
+                'available': 'Available incidents will appear automatically',
+                'assigned': 'Take an available incident to see it here',
+                'completed': 'Completed tasks will appear here'
+            };
+            return messages[type] || '';
+        }
+
+        function getSeverityText(severity) {
+            const texts = {
+                1: 'Low',
+                2: 'Medium',
+                3: 'High',
+                4: 'Critical',
+                5: 'Emergency'
+            };
+            return texts[severity] || 'Medium';
+        }
+
+        function formatTime(timestamp) {
+            const now = new Date();
+            const diff = now - new Date(timestamp);
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(minutes / 60);
+            
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            return new Date(timestamp).toLocaleDateString();
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-20 right-4 p-4 rounded-lg shadow-lg z-50 ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            } text-white`;
+            notification.textContent = message;
+
+            document.body.appendChild(notification);
+
+            anime({
+                targets: notification,
+                translateX: [300, 0],
+                opacity: [0, 1],
+                duration: 300,
+                easing: 'easeOutQuad'
+            });
+
+            setTimeout(() => {
+                anime({
+                    targets: notification,
+                    translateX: [0, 300],
+                    opacity: [1, 0],
+                    duration: 300,
+                    easing: 'easeInQuad',
+                    complete: () => {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }
+                });
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
