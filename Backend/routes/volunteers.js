@@ -104,12 +104,19 @@ router.post('/assign-task/:incidentId', protect, authorize('volunteer'), async (
     incident.assignedTo = req.user._id;
     incident.assignedAt = new Date();
     incident.status = 'pending';
+    
+    // Add volunteer to assignedVolunteers array if not already there
+    if (!incident.assignedVolunteers.includes(req.user._id)) {
+      incident.assignedVolunteers.push(req.user._id);
+    }
 
     await incident.save();
 
-    // Add to volunteer's assigned tasks
-    req.user.assignedTasks.push(incident._id);
-    await req.user.save();
+    // Add to volunteer's assigned tasks if not already there
+    if (!req.user.assignedTasks.includes(incident._id)) {
+      req.user.assignedTasks.push(incident._id);
+      await req.user.save();
+    }
 
     const updatedIncident = await Incident.findById(incident._id)
       .populate('reporterId', 'firstName lastName email')
@@ -194,6 +201,62 @@ router.put('/update-location', protect, authorize('volunteer'), async (req, res)
     });
   } catch (error) {
     console.error('Update location error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   POST /api/volunteers/unassign-task/:incidentId
+// @desc    Unassign task from volunteer (go back/release)
+// @access  Private/Volunteer
+router.post('/unassign-task/:incidentId', protect, authorize('volunteer'), async (req, res) => {
+  try {
+    const incident = await Incident.findOne({ id: req.params.incidentId });
+
+    if (!incident) {
+      return res.status(404).json({
+        success: false,
+        message: 'Incident not found'
+      });
+    }
+
+    if (incident.assignedTo && incident.assignedTo.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'This task is not assigned to you'
+      });
+    }
+
+    // Unassign from volunteer
+    incident.assignedTo = null;
+    incident.assignedAt = null;
+    incident.status = 'available';
+    
+    // Remove volunteer from assignedVolunteers array
+    incident.assignedVolunteers = incident.assignedVolunteers.filter(
+      volId => volId.toString() !== req.user._id.toString()
+    );
+
+    await incident.save();
+
+    // Remove from volunteer's assigned tasks
+    req.user.assignedTasks = req.user.assignedTasks.filter(
+      taskId => taskId.toString() !== incident._id.toString()
+    );
+    await req.user.save();
+
+    const updatedIncident = await Incident.findById(incident._id)
+      .populate('reporterId', 'firstName lastName email');
+
+    res.json({
+      success: true,
+      data: updatedIncident,
+      message: 'Task unassigned successfully'
+    });
+  } catch (error) {
+    console.error('Unassign task error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

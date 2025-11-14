@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Navigation from './Navigation';
-import { getSession, getIncidents, saveIncidents } from '../utils/storage';
-import { formatTime, generateIncidentId } from '../utils/format';
+import { getSession } from '../utils/storage';
+import { incidentsAPI } from '../utils/api';
+import { formatTime } from '../utils/format';
 import { showNotification } from '../utils/notifications';
 
 const UserDashboard = () => {
@@ -63,10 +64,116 @@ const UserDashboard = () => {
     }
   }, [user]);
 
-  const loadIncidents = () => {
+  // Update map when incidents change
+  useEffect(() => {
+    if (mapInstanceRef.current && incidents.length >= 0 && clusterGroupRef.current !== null) {
+      // Re-initialize map markers when incidents update
+      const updateMapWithIncidents = () => {
+        if (!mapInstanceRef.current || !window.L) return;
+        
+        try {
+          // Remove existing cluster group
+          if (clusterGroupRef.current) {
+            mapInstanceRef.current.removeLayer(clusterGroupRef.current);
+            clusterGroupRef.current.clearLayers();
+            clusterGroupRef.current = null;
+          }
+          
+          // Recreate cluster group
+          if (window.L.markerClusterGroup) {
+            clusterGroupRef.current = window.L.markerClusterGroup({
+              maxClusterRadius: 50,
+              spiderfyOnMaxZoom: true,
+              showCoverageOnHover: false,
+              zoomToBoundsOnClick: true
+            });
+          } else {
+            clusterGroupRef.current = window.L.layerGroup();
+          }
+
+          const allIncidents = incidents.filter(i => {
+            if (!i.location) return false;
+            const lat = i.location.lat || (i.location.coordinates && i.location.coordinates[1]);
+            const lng = i.location.lng || (i.location.coordinates && i.location.coordinates[0]);
+            return lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+          });
+          
+          console.log('UserDashboard useEffect: Updating map with', allIncidents.length, 'incidents');
+          
+          allIncidents.forEach(incident => {
+            // Get coordinates - handle different data structures
+            const lat = incident.location.lat || (incident.location.coordinates && incident.location.coordinates[1]) || incident.location[1];
+            const lng = incident.location.lng || (incident.location.coordinates && incident.location.coordinates[0]) || incident.location[0];
+            
+            if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+              console.warn('Invalid location for incident:', incident.id, incident.location);
+              return;
+            }
+            
+            const color = incident.severity === 5 ? '#8e44ad' : 
+                         incident.severity === 4 ? '#e74c3c' : 
+                         incident.severity === 3 ? '#e67e22' : 
+                         incident.severity === 2 ? '#f39c12' : '#27ae60';
+            
+            const isVerified = incident.verified !== false;
+            const markerColor = isVerified ? color : '#f59e0b';
+            const opacity = isVerified ? 0.8 : 0.6;
+            
+            const marker = window.L.circleMarker([lat, lng], {
+              radius: 6,
+              fillColor: markerColor,
+              color: '#ffffff',
+              weight: 2,
+              opacity: 1,
+              fillOpacity: opacity
+            });
+            
+            const popupContent = `
+              <div style="padding: 8px;">
+                <h4 style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">${incident.id}</h4>
+                <p style="font-size: 12px; color: #666; margin-bottom: 4px;">${incident.type.toUpperCase()} - Severity ${incident.severity}</p>
+                <p style="font-size: 12px; margin-bottom: 4px;">${incident.description}</p>
+                <p style="font-size: 11px; color: #999;">Status: ${incident.status} ${!isVerified ? '(Unverified)' : ''}</p>
+              </div>
+            `;
+            marker.bindPopup(popupContent);
+            clusterGroupRef.current.addLayer(marker);
+          });
+          
+          if (clusterGroupRef.current) {
+            clusterGroupRef.current.addTo(mapInstanceRef.current);
+          }
+        } catch (error) {
+          console.error('Error updating map markers:', error);
+        }
+      };
+      
+      const timer = setTimeout(() => {
+        updateMapWithIncidents();
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [incidents]);
+
+  const loadIncidents = async () => {
     if (!user) return;
-    const allIncidents = getIncidents();
-    setIncidents(allIncidents);
+    try {
+      console.log('UserDashboard: Loading incidents...');
+      const response = await incidentsAPI.getAll();
+      console.log('UserDashboard: Incidents response:', response);
+      
+      if (response.success) {
+        const incidentsData = response.data || [];
+        console.log('UserDashboard: Setting incidents:', incidentsData.length);
+        setIncidents(incidentsData);
+      } else {
+        console.error('UserDashboard: Response not successful:', response);
+        showNotification('Failed to load incidents', 'error');
+      }
+    } catch (error) {
+      console.error('UserDashboard: Error loading incidents:', error);
+      showNotification(error.message || 'Failed to load incidents', 'error');
+    }
   };
 
   const initializeMap = () => {
@@ -133,8 +240,25 @@ const UserDashboard = () => {
       }
 
       // Load ALL existing incidents (including unverified)
-      const allIncidents = getIncidents();
-      allIncidents.filter(i => i.location).forEach(incident => {
+      // This will be populated from state after API call
+      const allIncidents = incidents.filter(i => {
+        if (!i.location) return false;
+        const lat = i.location.lat || (i.location.coordinates && i.location.coordinates[1]);
+        const lng = i.location.lng || (i.location.coordinates && i.location.coordinates[0]);
+        return lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+      });
+      
+      console.log('UserDashboard: Updating map with', allIncidents.length, 'incidents');
+      
+      allIncidents.forEach(incident => {
+        // Get coordinates - handle different data structures
+        const lat = incident.location.lat || (incident.location.coordinates && incident.location.coordinates[1]) || incident.location[1];
+        const lng = incident.location.lng || (incident.location.coordinates && incident.location.coordinates[0]) || incident.location[0];
+        
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          console.warn('Invalid location for incident:', incident.id, incident.location);
+          return;
+        }
         const color = incident.severity === 5 ? '#8e44ad' : 
                      incident.severity === 4 ? '#e74c3c' : 
                      incident.severity === 3 ? '#e67e22' : 
@@ -144,7 +268,7 @@ const UserDashboard = () => {
         const markerColor = isVerified ? color : '#f59e0b';
         const opacity = isVerified ? 0.8 : 0.6;
         
-        const marker = window.L.circleMarker([incident.location.lat, incident.location.lng], {
+        const marker = window.L.circleMarker([lat, lng], {
           radius: 6,
           fillColor: markerColor,
           color: '#ffffff',
@@ -223,7 +347,7 @@ const UserDashboard = () => {
     );
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!formData.type || !formData.severity || !formData.description) {
@@ -231,58 +355,68 @@ const UserDashboard = () => {
       return;
     }
     
-    if (!formData.location) {
-      showNotification('Please select a location on the map or use GPS', 'error');
-      return;
-    }
-
-    const newIncident = {
-      id: generateIncidentId(),
-      type: formData.type,
-      severity: parseInt(formData.severity),
-      status: 'unverified',
-      location: formData.location,
-      description: formData.description,
-      timestamp: new Date(),
-      reporter: `${user.firstName} ${user.lastName}`,
-      reporterId: user.id,
-      assignedVolunteers: [],
-      resources: [],
-      resolvedAt: null,
-      assignedTo: null,
-      verified: false
-    };
-
-    const allIncidents = getIncidents();
-    allIncidents.unshift(newIncident);
-    saveIncidents(allIncidents);
-    setIncidents(allIncidents);
-    
-    // Force immediate map update
-    setTimeout(() => {
-      if (mapInstanceRef.current && clusterGroupRef.current) {
-        // Reload incidents on map
-        const updatedIncidents = getIncidents();
-        setIncidents(updatedIncidents);
+    try {
+      // Validate location
+      if (!formData.location || !formData.location.lat || !formData.location.lng) {
+        showNotification('Please select a location on the map or use GPS', 'error');
+        return;
       }
-    }, 100);
-    
-    showNotification('Incident reported successfully!', 'success');
-    
-    // Reset form
-    setFormData({ type: '', severity: '', description: '', location: null });
-    setSelectedLocation(null);
-    
-    // Clear location markers
-    if (mapInstanceRef.current && locationMarkerRef.current) {
-      mapInstanceRef.current.removeLayer(locationMarkerRef.current);
-      locationMarkerRef.current = null;
+
+      // Validate all fields
+      if (!formData.type || !formData.severity || !formData.description) {
+        showNotification('Please fill in all required fields', 'error');
+        return;
+      }
+
+      const incidentData = {
+        type: formData.type,
+        severity: parseInt(formData.severity),
+        description: formData.description.trim(),
+        location: {
+          lat: parseFloat(formData.location.lat),
+          lng: parseFloat(formData.location.lng)
+        }
+      };
+
+          console.log('Creating incident with data:', incidentData);
+          
+          const response = await incidentsAPI.create(incidentData);
+
+          console.log('Incident creation response:', response);
+
+      if (response.success) {
+        showNotification('Incident reported successfully!', 'success');
+        
+        // Reset form first
+        setFormData({ type: '', severity: '', description: '', location: null });
+        setSelectedLocation(null);
+        
+        // Clear location markers
+        if (mapInstanceRef.current && locationMarkerRef.current) {
+          mapInstanceRef.current.removeLayer(locationMarkerRef.current);
+          locationMarkerRef.current = null;
+        }
+        
+        // Reload incidents to update the list and map - wait a bit for DB to update
+        setTimeout(async () => {
+          await loadIncidents();
+        }, 500);
+      } else {
+        showNotification(response.message || 'Failed to report incident', 'error');
+      }
+    } catch (error) {
+      console.error('Error creating incident:', error);
+      showNotification(error.message || 'Failed to report incident. Please try again.', 'error');
     }
   };
 
   if (!user) return null;
 
-  const userReports = incidents.filter(i => i.reporterId === user.id);
+  const userReports = incidents.filter(i => {
+    const reporterId = i.reporterId?._id || i.reporterId?.id || i.reporterId;
+    const userId = user?._id || user?.id;
+    return reporterId && userId && reporterId.toString() === userId.toString();
+  });
 
   return (
     <div className="bg-gray-50 min-h-screen">

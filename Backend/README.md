@@ -32,7 +32,7 @@ RESTful API backend for the Disaster Response Management System built with Node.
    
    Edit `.env` and configure:
    - `PORT` - Server port (default: 5000)
-   - `MONGODB_URI` - MongoDB connection string
+   - `MONGODB_URI` - MongoDB connection string (default: `mongodb://localhost:27017/Disaster`)
    - `JWT_SECRET` - Secret key for JWT tokens
    - `JWT_EXPIRE` - Token expiration time
 

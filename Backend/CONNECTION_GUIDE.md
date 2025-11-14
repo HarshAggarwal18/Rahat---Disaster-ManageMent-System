@@ -35,7 +35,7 @@
 ### Option 1: Local MongoDB
 1. Install MongoDB Community Edition
 2. Start MongoDB service
-3. Use connection string: `mongodb://localhost:27017/disaster_response`
+3. Use connection string: `mongodb://localhost:27017/Disaster`
 
 ### Option 2: MongoDB Atlas (Cloud)
 1. Create free account at https://www.mongodb.com/cloud/atlas

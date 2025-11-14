@@ -24,6 +24,7 @@ router.get('/', protect, async (req, res) => {
       .populate('reporterId', 'firstName lastName email')
       .populate('assignedTo', 'firstName lastName email')
       .populate('verifiedBy', 'firstName lastName email')
+      .populate('assignedVolunteers', 'firstName lastName email')
       .sort({ timestamp: -1 });
 
     res.json({
@@ -48,7 +49,8 @@ router.get('/:id', protect, async (req, res) => {
     const incident = await Incident.findOne({ id: req.params.id })
       .populate('reporterId', 'firstName lastName email')
       .populate('assignedTo', 'firstName lastName email')
-      .populate('verifiedBy', 'firstName lastName email');
+      .populate('verifiedBy', 'firstName lastName email')
+      .populate('assignedVolunteers', 'firstName lastName email');
 
     if (!incident) {
       return res.status(404).json({
@@ -83,8 +85,10 @@ router.post('/', protect, [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('Validation errors:', errors.array());
       return res.status(400).json({
         success: false,
+        message: errors.array().map(e => e.msg).join(', '),
         errors: errors.array()
       });
     }

@@ -1,13 +1,15 @@
-// Utility functions for localStorage management
+// Utility functions for session management (localStorage for token)
+// All data operations now use API calls
 
 export const getSession = () => {
   const session = localStorage.getItem('disaster_response_session');
   return session ? JSON.parse(session) : null;
 };
 
-export const setSession = (user) => {
+export const setSession = (user, token) => {
   localStorage.setItem('disaster_response_session', JSON.stringify({
     ...user,
+    token,
     loginTime: new Date().toISOString()
   }));
 };
@@ -16,122 +18,41 @@ export const clearSession = () => {
   localStorage.removeItem('disaster_response_session');
 };
 
+// Legacy functions for backward compatibility - now use API
+// These are kept for components that might still reference them
 export const getIncidents = () => {
-  const incidents = localStorage.getItem('disaster_response_incidents');
-  return incidents ? JSON.parse(incidents) : [];
+  // This is now handled by API calls in components
+  return [];
 };
 
 export const saveIncidents = (incidents) => {
-  localStorage.setItem('disaster_response_incidents', JSON.stringify(incidents));
+  // This is now handled by API calls in components
+  console.warn('saveIncidents: Use API calls instead');
 };
 
 export const getUsers = () => {
-  const users = localStorage.getItem('disaster_response_users');
-  return users ? JSON.parse(users) : [];
+  // This is now handled by API calls in components
+  return [];
 };
 
 export const saveUsers = (users) => {
-  localStorage.setItem('disaster_response_users', JSON.stringify(users));
+  // This is now handled by API calls in components
+  console.warn('saveUsers: Use API calls instead');
 };
 
 export const getVolunteers = () => {
-  const volunteers = localStorage.getItem('disaster_response_volunteers');
-  return volunteers ? JSON.parse(volunteers) : [];
+  // This is now handled by API calls in components
+  return [];
 };
 
 export const saveVolunteers = (volunteers) => {
-  localStorage.setItem('disaster_response_volunteers', JSON.stringify(volunteers));
+  // This is now handled by API calls in components
+  console.warn('saveVolunteers: Use API calls instead');
 };
 
 export const initializeDemoData = () => {
-  if (!localStorage.getItem('disaster_response_users')) {
-    const demoUsers = [
-      {
-        id: 'USER-demo-admin',
-        firstName: 'Admin',
-        lastName: 'User',
-        email: 'admin@demo.com',
-        password: 'demo123',
-        role: 'admin',
-        signupDate: new Date().toISOString()
-      },
-      {
-        id: 'USER-demo-volunteer',
-        firstName: 'Volunteer',
-        lastName: 'User',
-        email: 'volunteer@demo.com',
-        password: 'demo123',
-        role: 'volunteer',
-        signupDate: new Date().toISOString()
-      },
-      {
-        id: 'USER-demo-user',
-        firstName: 'Regular',
-        lastName: 'User',
-        email: 'user@demo.com',
-        password: 'demo123',
-        role: 'user',
-        signupDate: new Date().toISOString()
-      }
-    ];
-    localStorage.setItem('disaster_response_users', JSON.stringify(demoUsers));
-  }
-
-  if (!localStorage.getItem('disaster_response_incidents')) {
-    const demoIncidents = [
-      {
-        id: 'INC-2025-001',
-        type: 'fire',
-        severity: 5,
-        status: 'unverified',
-        location: { lat: 40.7589, lng: -73.9851 },
-        description: 'High-rise building fire in Manhattan',
-        timestamp: new Date(),
-        reporter: 'John Smith',
-        reporterId: 'USER-demo-user',
-        assignedVolunteers: [],
-        resources: [],
-        resolvedAt: null,
-        assignedTo: null,
-        verified: false
-      },
-      {
-        id: 'INC-2025-002',
-        type: 'medical',
-        severity: 3,
-        status: 'available',
-        location: { lat: 40.7505, lng: -73.9934 },
-        description: 'Cardiac emergency at subway station',
-        timestamp: new Date(Date.now() - 1000 * 60 * 30),
-        reporter: 'Jane Doe',
-        reporterId: 'USER-demo-user',
-        assignedVolunteers: [],
-        resources: [],
-        resolvedAt: null,
-        assignedTo: null,
-        verified: true
-      }
-    ];
-    localStorage.setItem('disaster_response_incidents', JSON.stringify(demoIncidents));
-  }
-
-  if (!localStorage.getItem('disaster_response_volunteers')) {
-    const demoVolunteers = [
-      {
-        id: 'USER-demo-volunteer',
-        name: 'Volunteer User',
-        skills: ['First Aid', 'Fire Response'],
-        availability: true,
-        location: { lat: 40.7500, lng: -73.9900 },
-        contact: 'volunteer@demo.com',
-        assignedTasks: [],
-        hoursLogged: 0,
-        status: 'active',
-        currentLocation: { lat: 40.7500, lng: -73.9900 }
-      }
-    ];
-    localStorage.setItem('disaster_response_volunteers', JSON.stringify(demoVolunteers));
-  }
+  // No longer needed - data comes from backend
+  // This function is kept for compatibility but does nothing
 };
 
 

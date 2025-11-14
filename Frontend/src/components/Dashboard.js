@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Navigation from './Navigation';
-import { getSession, getIncidents, getUsers } from '../utils/storage';
+import { getSession } from '../utils/storage';
+import { incidentsAPI, usersAPI, adminAPI } from '../utils/api';
 import { formatTime, getSeverityColorClass } from '../utils/format';
 import { showNotification } from '../utils/notifications';
 
@@ -85,32 +86,65 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (mapInstanceRef.current && incidents.length >= 0) {
-      updateMapMarkers();
+      // Delay to ensure map is fully rendered and incidents are loaded
+      const timer = setTimeout(() => {
+        updateMapMarkers();
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [incidents, showHeatmap]);
 
-  const loadData = () => {
-    const allIncidents = getIncidents();
-    const users = getUsers();
-    
-    setIncidents(allIncidents);
-    
-    const verifiedIncidents = allIncidents.filter(i => i.verified);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const resolvedToday = allIncidents.filter(i => {
-      if (!i.resolvedAt) return false;
-      const resolvedDate = new Date(i.resolvedAt);
-      resolvedDate.setHours(0, 0, 0, 0);
-      return resolvedDate.getTime() === today.getTime();
-    }).length;
+  const loadData = async () => {
+    try {
+      console.log('Dashboard: Loading data...');
+      // Load incidents
+      const incidentsResponse = await incidentsAPI.getAll();
+      console.log('Dashboard: Incidents response:', incidentsResponse);
+      
+      if (incidentsResponse.success) {
+        const incidentsData = incidentsResponse.data || [];
+        console.log('Dashboard: Setting incidents:', incidentsData.length);
+        setIncidents(incidentsData);
+        
+        const verifiedIncidents = incidentsData.filter(i => i.verified);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const resolvedToday = incidentsData.filter(i => {
+          if (!i.resolvedAt) return false;
+          const resolvedDate = new Date(i.resolvedAt);
+          resolvedDate.setHours(0, 0, 0, 0);
+          return resolvedDate.getTime() === today.getTime();
+        }).length;
 
-    setStats({
-      critical: verifiedIncidents.length,
-      volunteers: users.filter(u => u.role === 'volunteer').length,
-      resolved: resolvedToday,
-      avgResponse: 12
-    });
+        // Load users for volunteer count
+        try {
+          const usersResponse = await usersAPI.getAll();
+          const users = usersResponse.success ? (usersResponse.data || []) : [];
+          
+          setStats({
+            critical: verifiedIncidents.length,
+            volunteers: users.filter(u => u.role === 'volunteer').length,
+            resolved: resolvedToday,
+            avgResponse: 12
+          });
+        } catch (err) {
+          console.warn('Dashboard: Could not load users (may not be admin):', err);
+          // If user API fails (not admin), use default
+          setStats({
+            critical: verifiedIncidents.length,
+            volunteers: 0,
+            resolved: resolvedToday,
+            avgResponse: 12
+          });
+        }
+      } else {
+        console.error('Dashboard: Incidents response not successful:', incidentsResponse);
+        showNotification('Failed to load incidents', 'error');
+      }
+    } catch (error) {
+      console.error('Dashboard: Error loading data:', error);
+      showNotification(error.message || 'Failed to load data', 'error');
+    }
   };
 
   const initializeMap = () => {
@@ -182,8 +216,25 @@ const Dashboard = () => {
       }
 
       // Show ALL incidents (including unverified/reported ones)
-      const allIncidents = incidents.filter(i => i.location);
+      const allIncidents = incidents.filter(i => {
+        if (!i.location) return false;
+        // Handle both object and nested structure
+        const lat = i.location.lat || (i.location.coordinates && i.location.coordinates[1]);
+        const lng = i.location.lng || (i.location.coordinates && i.location.coordinates[0]);
+        return lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+      });
+      
+      console.log('Updating map with', allIncidents.length, 'incidents');
+      
       allIncidents.forEach(incident => {
+        // Get coordinates - handle different data structures
+        const lat = incident.location.lat || (incident.location.coordinates && incident.location.coordinates[1]) || incident.location[1];
+        const lng = incident.location.lng || (incident.location.coordinates && incident.location.coordinates[0]) || incident.location[0];
+        
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          console.warn('Invalid location for incident:', incident.id, incident.location);
+          return;
+        }
         const color = incident.severity === 5 ? '#8e44ad' : 
                      incident.severity === 4 ? '#e74c3c' : 
                      incident.severity === 3 ? '#e67e22' : 
@@ -194,7 +245,7 @@ const Dashboard = () => {
         const markerColor = isVerified ? color : '#f59e0b';
         const opacity = isVerified ? 0.8 : 0.6;
         
-        const marker = window.L.circleMarker([incident.location.lat, incident.location.lng], {
+        const marker = window.L.circleMarker([lat, lng], {
           radius: 8,
           fillColor: markerColor,
           color: '#ffffff',
@@ -222,27 +273,58 @@ const Dashboard = () => {
       // Add cluster group to map
       clusterGroupRef.current.addTo(mapInstanceRef.current);
 
-      // Add heat map if enabled
-      if (showHeatmap && window.L && window.L.heatLayer) {
-        const heatData = allIncidents.map(incident => [
-          incident.location.lat,
-          incident.location.lng,
-          (incident.severity || 1) * 0.2 // Intensity based on severity (0.2 to 1.0)
-        ]);
+      // Add heat map if enabled - only show available incidents
+      if (showHeatmap && window.L) {
+        // Check if heatLayer is available (different ways it might be exposed)
+        // leaflet-heat exposes it as L.heatLayer
+        const HeatLayer = window.L.heatLayer || window.L.HeatLayer || (window.HeatLayer && window.HeatLayer.heatLayer);
         
-        heatLayerRef.current = window.L.heatLayer(heatData, {
-          radius: 30,
-          blur: 20,
-          maxZoom: 17,
-          gradient: {
-            0.0: 'blue',
-            0.3: 'cyan',
-            0.5: 'lime',
-            0.7: 'yellow',
-            1.0: 'red'
+        if (HeatLayer) {
+          // Filter only available and verified incidents for heatmap
+          const availableIncidents = allIncidents.filter(i => 
+            i.verified && i.status === 'available' && !i.assignedTo
+          );
+          
+          console.log('Dashboard: Creating heatmap with', availableIncidents.length, 'available incidents');
+          
+          const heatData = availableIncidents.map(incident => {
+            const lat = incident.location.lat || (incident.location.coordinates && incident.location.coordinates[1]) || incident.location[1];
+            const lng = incident.location.lng || (incident.location.coordinates && incident.location.coordinates[0]) || incident.location[0];
+            // Scale severity (1-5) to intensity (0.3-1.0) for bold colors
+            const intensity = 0.3 + ((incident.severity || 1) - 1) / 4 * 0.7;
+            return [lat, lng, intensity];
+          }).filter(data => data[0] != null && data[1] != null && !isNaN(data[0]) && !isNaN(data[1]));
+          
+          console.log('Dashboard: Heatmap data points:', heatData.length);
+          
+          if (heatData.length > 0) {
+            try {
+              heatLayerRef.current = HeatLayer(heatData, {
+                radius: 50, // Increased radius for better visibility
+                blur: 30, // Increased blur for smoother heat effect
+                maxZoom: 18,
+                minOpacity: 0.7, // More visible
+                max: 1.0,
+                gradient: {
+                  0.0: '#00ff00', // Bold green for low severity
+                  0.2: '#ffff00', // Bold yellow
+                  0.4: '#ff8800', // Bold orange
+                  0.6: '#ff4400', // Bold red-orange
+                  0.8: '#ff0000', // Bold red
+                  1.0: '#cc0000'  // Bold dark red for highest severity
+                }
+              });
+              heatLayerRef.current.addTo(mapInstanceRef.current);
+              console.log('Dashboard: Heatmap added successfully');
+            } catch (heatError) {
+              console.error('Dashboard: Error creating heatmap:', heatError);
+            }
+          } else {
+            console.warn('Dashboard: No heatmap data points available');
           }
-        });
-        heatLayerRef.current.addTo(mapInstanceRef.current);
+        } else {
+          console.warn('Dashboard: HeatLayer not available. Make sure leaflet-heat.js is loaded.');
+        }
       }
     } catch (error) {
       console.error('Error updating map markers:', error);

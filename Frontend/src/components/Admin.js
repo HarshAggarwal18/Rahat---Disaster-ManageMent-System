@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Navigation from './Navigation';
-import { getSession, getIncidents, getUsers, saveIncidents } from '../utils/storage';
+import { getSession } from '../utils/storage';
+import { incidentsAPI, usersAPI, adminAPI } from '../utils/api';
 import { formatTime, getSeverityText, getSeverityColor } from '../utils/format';
 import { showNotification } from '../utils/notifications';
 
@@ -8,13 +9,16 @@ const Admin = () => {
   const [user, setUser] = useState(null);
   const [incidents, setIncidents] = useState([]);
   const [users, setUsers] = useState([]);
+  const [assigningIncident, setAssigningIncident] = useState(null);
   const [activeSection, setActiveSection] = useState('dashboard');
   const [verificationFilter, setVerificationFilter] = useState('all');
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [selectedVolunteer, setSelectedVolunteer] = useState(null);
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const clusterGroupRef = useRef(null);
   const heatLayerRef = useRef(null);
+  const volunteerMarkersRef = useRef({});
 
   useEffect(() => {
     const session = getSession();
@@ -60,7 +64,7 @@ const Admin = () => {
     if (mapInstanceRef.current && activeSection === 'dashboard' && incidents.length >= 0) {
       updateMapMarkers();
     }
-  }, [incidents, activeSection, showHeatmap]);
+  }, [incidents, activeSection, showHeatmap, users]);
 
   useEffect(() => {
     // Initialize charts when analytics section is active
@@ -74,35 +78,106 @@ const Admin = () => {
     }
   }, [activeSection, incidents]);
 
-  const loadData = () => {
-    setIncidents(getIncidents());
-    setUsers(getUsers());
-  };
-
-  const verifyIncident = (incidentId) => {
-    const updatedIncidents = incidents.map(incident => {
-      if (incident.id === incidentId) {
-        return {
-          ...incident,
-          verified: true,
-          status: 'available',
-          verifiedBy: user.id,
-          verifiedAt: new Date()
-        };
+  const loadData = async () => {
+    try {
+      console.log('Admin: Loading data...');
+      // Load incidents
+      const incidentsResponse = await incidentsAPI.getAll();
+      console.log('Admin: Incidents response:', incidentsResponse);
+      
+      if (incidentsResponse.success) {
+        const incidentsData = incidentsResponse.data || [];
+        console.log('Admin: Setting incidents:', incidentsData.length);
+        setIncidents(incidentsData);
+      } else {
+        console.error('Admin: Incidents response not successful:', incidentsResponse);
       }
-      return incident;
-    });
-    saveIncidents(updatedIncidents);
-    setIncidents(updatedIncidents);
-    showNotification(`Incident ${incidentId} verified successfully`, 'success');
+      
+      // Load users
+      try {
+        const usersResponse = await usersAPI.getAll();
+        console.log('Admin: Users response:', usersResponse);
+        
+        if (usersResponse.success) {
+          const usersData = usersResponse.data || [];
+          console.log('Admin: Setting users:', usersData.length);
+          setUsers(usersData);
+        } else {
+          console.error('Admin: Users response not successful:', usersResponse);
+        }
+      } catch (userError) {
+        console.error('Admin: Error loading users:', userError);
+        // Don't show error for users, just log it
+      }
+    } catch (error) {
+      console.error('Admin: Error loading data:', error);
+      showNotification(error.message || 'Failed to load data', 'error');
+    }
   };
 
-  const rejectIncident = (incidentId) => {
+  const verifyIncident = async (incidentId) => {
+    try {
+      console.log('Admin: Verifying incident:', incidentId);
+      const response = await adminAPI.verifyIncident(incidentId);
+      console.log('Admin: Verify response:', response);
+      
+      if (response.success) {
+        showNotification(`Incident ${incidentId} verified successfully`, 'success');
+        // Reload incidents after a short delay to ensure DB is updated
+        setTimeout(async () => {
+          await loadData();
+        }, 300);
+      } else {
+        showNotification(response.message || 'Failed to verify incident', 'error');
+      }
+    } catch (error) {
+      console.error('Admin: Error verifying incident:', error);
+      showNotification(error.message || 'Failed to verify incident', 'error');
+    }
+  };
+
+  const rejectIncident = async (incidentId) => {
     if (window.confirm('Are you sure you want to reject this incident?')) {
-      const updatedIncidents = incidents.filter(i => i.id !== incidentId);
-      saveIncidents(updatedIncidents);
-      setIncidents(updatedIncidents);
-      showNotification(`Incident ${incidentId} rejected and removed`, 'warning');
+      try {
+        console.log('Admin: Rejecting incident:', incidentId);
+        const response = await adminAPI.rejectIncident(incidentId);
+        console.log('Admin: Reject response:', response);
+        
+        if (response.success) {
+          showNotification(`Incident ${incidentId} rejected and removed`, 'warning');
+          // Reload incidents after a short delay to ensure DB is updated
+          setTimeout(async () => {
+            await loadData();
+          }, 300);
+        } else {
+          showNotification(response.message || 'Failed to reject incident', 'error');
+        }
+      } catch (error) {
+        console.error('Admin: Error rejecting incident:', error);
+        showNotification(error.message || 'Failed to reject incident', 'error');
+      }
+    }
+  };
+
+  const assignIncidentToVolunteer = async (incidentId, volunteerId) => {
+    try {
+      console.log('Admin: Assigning incident:', incidentId, 'to volunteer:', volunteerId);
+      const response = await adminAPI.assignIncidentToVolunteer(incidentId, volunteerId);
+      console.log('Admin: Assign response:', response);
+      
+      if (response.success) {
+        showNotification(`Incident ${incidentId} assigned to volunteer successfully!`, 'success');
+        setAssigningIncident(null);
+        // Reload data after a short delay
+        setTimeout(async () => {
+          await loadData();
+        }, 300);
+      } else {
+        showNotification(response.message || 'Failed to assign incident', 'error');
+      }
+    } catch (error) {
+      console.error('Admin: Error assigning incident:', error);
+      showNotification(error.message || 'Failed to assign incident', 'error');
     }
   };
 
@@ -182,9 +257,51 @@ const Admin = () => {
         clusterGroupRef.current = window.L.layerGroup();
       }
 
+      // Clear existing volunteer markers
+      Object.values(volunteerMarkersRef.current).forEach(marker => {
+        if (marker && mapInstanceRef.current) {
+          mapInstanceRef.current.removeLayer(marker);
+        }
+      });
+      volunteerMarkersRef.current = {};
+
+      // Add volunteer markers
+      const volunteers = users.filter(u => u.role === 'volunteer' && u.currentLocation);
+      volunteers.forEach(volunteer => {
+        const loc = volunteer.currentLocation;
+        if (loc && loc.lat && loc.lng) {
+          const marker = window.L.marker([loc.lat, loc.lng], {
+            icon: window.L.divIcon({
+              className: 'volunteer-marker',
+              html: '<div style="background: #3b82f6; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">👤</div>',
+              iconSize: [24, 24],
+              iconAnchor: [12, 12]
+            })
+          }).addTo(mapInstanceRef.current);
+          marker.bindPopup(`<strong>${volunteer.firstName} ${volunteer.lastName}</strong><br>${volunteer.email}`);
+          volunteerMarkersRef.current[volunteer._id || volunteer.id] = marker;
+        }
+      });
+
       // Show ALL incidents (including unverified ones for admin)
-      const allIncidents = incidents.filter(i => i.location);
+      const allIncidents = incidents.filter(i => {
+        if (!i.location) return false;
+        const lat = i.location.lat || (i.location.coordinates && i.location.coordinates[1]);
+        const lng = i.location.lng || (i.location.coordinates && i.location.coordinates[0]);
+        return lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+      });
+      
+      console.log('Admin: Updating map with', allIncidents.length, 'incidents');
+      
       allIncidents.forEach(incident => {
+        // Get coordinates - handle different data structures
+        const lat = incident.location.lat || (incident.location.coordinates && incident.location.coordinates[1]) || incident.location[1];
+        const lng = incident.location.lng || (incident.location.coordinates && incident.location.coordinates[0]) || incident.location[0];
+        
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          console.warn('Invalid location for incident:', incident.id, incident.location);
+          return;
+        }
         const color = incident.severity === 5 ? '#8e44ad' : 
                      incident.severity === 4 ? '#e74c3c' : 
                      incident.severity === 3 ? '#e67e22' : 
@@ -194,7 +311,7 @@ const Admin = () => {
         const markerColor = isVerified ? color : '#f59e0b';
         const opacity = isVerified ? 0.8 : 0.6;
         
-        const marker = window.L.circleMarker([incident.location.lat, incident.location.lng], {
+        const marker = window.L.circleMarker([lat, lng], {
           radius: 8,
           fillColor: markerColor,
           color: '#ffffff',
@@ -222,27 +339,58 @@ const Admin = () => {
       // Add cluster group to map
       clusterGroupRef.current.addTo(mapInstanceRef.current);
 
-      // Add heat map if enabled
-      if (showHeatmap && window.L && window.L.heatLayer) {
-        const heatData = allIncidents.map(incident => [
-          incident.location.lat,
-          incident.location.lng,
-          (incident.severity || 1) * 0.2 // Intensity based on severity
-        ]);
+      // Add heat map if enabled - only show available incidents
+      if (showHeatmap && window.L) {
+        // Check if heatLayer is available (different ways it might be exposed)
+        // leaflet-heat exposes it as L.heatLayer
+        const HeatLayer = window.L.heatLayer || window.L.HeatLayer || (window.HeatLayer && window.HeatLayer.heatLayer);
         
-        heatLayerRef.current = window.L.heatLayer(heatData, {
-          radius: 30,
-          blur: 20,
-          maxZoom: 17,
-          gradient: {
-            0.0: 'blue',
-            0.3: 'cyan',
-            0.5: 'lime',
-            0.7: 'yellow',
-            1.0: 'red'
+        if (HeatLayer) {
+          // Filter only available and verified incidents for heatmap
+          const availableIncidents = allIncidents.filter(i => 
+            i.verified && i.status === 'available' && !i.assignedTo
+          );
+          
+          console.log('Admin: Creating heatmap with', availableIncidents.length, 'available incidents');
+          
+          const heatData = availableIncidents.map(incident => {
+            const lat = incident.location.lat || (incident.location.coordinates && incident.location.coordinates[1]) || incident.location[1];
+            const lng = incident.location.lng || (incident.location.coordinates && incident.location.coordinates[0]) || incident.location[0];
+            // Scale severity (1-5) to intensity (0.3-1.0) for bold colors
+            const intensity = 0.3 + ((incident.severity || 1) - 1) / 4 * 0.7;
+            return [lat, lng, intensity];
+          }).filter(data => data[0] != null && data[1] != null && !isNaN(data[0]) && !isNaN(data[1]));
+          
+          console.log('Admin: Heatmap data points:', heatData.length);
+          
+          if (heatData.length > 0) {
+            try {
+              heatLayerRef.current = HeatLayer(heatData, {
+                radius: 50, // Increased radius for better visibility
+                blur: 30, // Increased blur for smoother heat effect
+                maxZoom: 18,
+                minOpacity: 0.7, // More visible
+                max: 1.0,
+                gradient: {
+                  0.0: '#00ff00', // Bold green for low severity
+                  0.2: '#ffff00', // Bold yellow
+                  0.4: '#ff8800', // Bold orange
+                  0.6: '#ff4400', // Bold red-orange
+                  0.8: '#ff0000', // Bold red
+                  1.0: '#cc0000'  // Bold dark red for highest severity
+                }
+              });
+              heatLayerRef.current.addTo(mapInstanceRef.current);
+              console.log('Admin: Heatmap added successfully');
+            } catch (heatError) {
+              console.error('Admin: Error creating heatmap:', heatError);
+            }
+          } else {
+            console.warn('Admin: No heatmap data points available');
           }
-        });
-        heatLayerRef.current.addTo(mapInstanceRef.current);
+        } else {
+          console.warn('Admin: HeatLayer not available. Make sure leaflet-heat.js is loaded.');
+        }
       }
     } catch (error) {
       console.error('Error updating map markers:', error);
@@ -444,7 +592,7 @@ const Admin = () => {
                         {incident.verified ? 'VERIFIED' : 'UNVERIFIED'}
                       </span>
                     </div>
-                    <div className="flex space-x-2">
+                    <div className="flex flex-wrap gap-2">
                       {!incident.verified && (
                         <>
                           <button
@@ -460,6 +608,40 @@ const Admin = () => {
                             ❌ Reject
                           </button>
                         </>
+                      )}
+                      {incident.verified && incident.status === 'available' && (
+                        <button
+                          onClick={() => setAssigningIncident(incident.id)}
+                          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                        >
+                          👤 Assign to Volunteer
+                        </button>
+                      )}
+                      {assigningIncident === incident.id && (
+                        <div className="w-full mt-2 p-3 bg-blue-50 rounded border border-blue-200">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Select Volunteer:</p>
+                          <select
+                            className="w-full p-2 border border-gray-300 rounded mb-2"
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                assignIncidentToVolunteer(incident.id, e.target.value);
+                              }
+                            }}
+                          >
+                            <option value="">Choose a volunteer...</option>
+                            {users.filter(u => u.role === 'volunteer').map(volunteer => (
+                              <option key={volunteer._id || volunteer.id} value={volunteer._id || volunteer.id}>
+                                {volunteer.firstName} {volunteer.lastName} ({volunteer.email})
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => setAssigningIncident(null)}
+                            className="text-sm text-gray-600 hover:text-gray-800"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -510,39 +692,156 @@ const Admin = () => {
           )}
 
           {activeSection === 'volunteers' && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Volunteer Management</h3>
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Name</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Email</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Tasks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.filter(u => u.role === 'volunteer').length === 0 ? (
-                    <tr>
-                      <td colSpan="4" className="py-8 text-center text-gray-500">No volunteers found</td>
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Volunteer Management</h3>
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Name</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Email</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Location</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Tasks</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
                     </tr>
-                  ) : (
-                    users.filter(u => u.role === 'volunteer').map(volunteer => {
-                      const volunteerTasks = incidents.filter(i => i.assignedTo === volunteer.id);
-                      return (
-                        <tr key={volunteer.id} className="border-b border-gray-100">
-                          <td className="py-3 px-4">{volunteer.firstName} {volunteer.lastName}</td>
-                          <td className="py-3 px-4">{volunteer.email}</td>
-                          <td className="py-3 px-4">
-                            <span className="px-2 py-1 rounded-full text-xs bg-green-500 text-white">Active</span>
-                          </td>
-                          <td className="py-3 px-4">{volunteerTasks.length}</td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {users.filter(u => u.role === 'volunteer').length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-gray-500">No volunteers found</td>
+                      </tr>
+                    ) : (
+                      users.filter(u => u.role === 'volunteer').map(volunteer => {
+                        const volunteerTasks = incidents.filter(i => {
+                          const assignedToId = i.assignedTo?._id || i.assignedTo?.id || i.assignedTo;
+                          const volunteerId = volunteer._id || volunteer.id;
+                          return assignedToId && volunteerId && assignedToId.toString() === volunteerId.toString();
+                        });
+                        const hasLocation = volunteer.currentLocation && volunteer.currentLocation.lat && volunteer.currentLocation.lng;
+                        return (
+                          <tr key={volunteer.id || volunteer._id} className="border-b border-gray-100">
+                            <td className="py-3 px-4">{volunteer.firstName} {volunteer.lastName}</td>
+                            <td className="py-3 px-4">{volunteer.email}</td>
+                            <td className="py-3 px-4">
+                              {hasLocation ? (
+                                <span className="text-xs text-green-600">
+                                  {volunteer.currentLocation.lat.toFixed(4)}, {volunteer.currentLocation.lng.toFixed(4)}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-400">Not set</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-1 rounded-full text-xs bg-green-500 text-white">Active</span>
+                            </td>
+                            <td className="py-3 px-4">{volunteerTasks.length}</td>
+                            <td className="py-3 px-4">
+                              <button
+                                onClick={() => setSelectedVolunteer(volunteer)}
+                                className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                              >
+                                📍 Mark Location
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {selectedVolunteer && (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Mark Location for {selectedVolunteer.firstName} {selectedVolunteer.lastName}
+                    </h3>
+                    <button
+                      onClick={() => setSelectedVolunteer(null)}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-600 mb-2">
+                      Click on the map in Dashboard section to set location, or use GPS to get current location.
+                    </p>
+                    <div className="flex gap-2 mb-4">
+                      <button
+                        onClick={async () => {
+                          if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition(
+                              async (position) => {
+                                const location = {
+                                  lat: position.coords.latitude,
+                                  lng: position.coords.longitude
+                                };
+                                try {
+                                  const response = await adminAPI.updateVolunteerLocation(
+                                    selectedVolunteer._id || selectedVolunteer.id,
+                                    location
+                                  );
+                                  if (response.success) {
+                                    showNotification('Volunteer location updated successfully!', 'success');
+                                    setSelectedVolunteer(null);
+                                    await loadData();
+                                  } else {
+                                    showNotification(response.message || 'Failed to update location', 'error');
+                                  }
+                                } catch (error) {
+                                  console.error('Error updating volunteer location:', error);
+                                  showNotification(error.message || 'Failed to update location', 'error');
+                                }
+                              },
+                              () => {
+                                showNotification('Unable to get location', 'error');
+                              }
+                            );
+                          } else {
+                            showNotification('Geolocation is not supported', 'error');
+                          }
+                        }}
+                        className="text-sm bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                      >
+                        📍 Use GPS Location
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (mapInstanceRef.current && selectedVolunteer) {
+                            const center = mapInstanceRef.current.getCenter();
+                            const location = {
+                              lat: center.lat,
+                              lng: center.lng
+                            };
+                            try {
+                              const response = await adminAPI.updateVolunteerLocation(
+                                selectedVolunteer._id || selectedVolunteer.id,
+                                location
+                              );
+                              if (response.success) {
+                                showNotification('Volunteer location updated successfully!', 'success');
+                                setSelectedVolunteer(null);
+                                await loadData();
+                              } else {
+                                showNotification(response.message || 'Failed to update location', 'error');
+                              }
+                            } catch (error) {
+                              console.error('Error updating volunteer location:', error);
+                              showNotification(error.message || 'Failed to update location', 'error');
+                            }
+                          }
+                        }}
+                        className="text-sm bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                      >
+                        📍 Use Map Center
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

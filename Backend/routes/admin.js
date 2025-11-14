@@ -221,5 +221,121 @@ router.put('/users/:userId/status', async (req, res) => {
   }
 });
 
+// @route   POST /api/admin/assign-incident/:incidentId
+// @desc    Assign incident to volunteer (Admin only)
+// @access  Private/Admin
+router.post('/assign-incident/:incidentId', async (req, res) => {
+  try {
+    const { volunteerId } = req.body;
+    const incident = await Incident.findOne({ id: req.params.incidentId });
+
+    if (!incident) {
+      return res.status(404).json({
+        success: false,
+        message: 'Incident not found'
+      });
+    }
+
+    if (!volunteerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Volunteer ID is required'
+      });
+    }
+
+    const volunteer = await User.findById(volunteerId);
+
+    if (!volunteer || volunteer.role !== 'volunteer') {
+      return res.status(404).json({
+        success: false,
+        message: 'Volunteer not found'
+      });
+    }
+
+    // Assign to volunteer
+    incident.assignedTo = volunteer._id;
+    incident.assignedAt = new Date();
+    incident.status = 'pending';
+    
+    // Add volunteer to assignedVolunteers array if not already there
+    if (!incident.assignedVolunteers.includes(volunteer._id)) {
+      incident.assignedVolunteers.push(volunteer._id);
+    }
+
+    await incident.save();
+
+    // Add to volunteer's assigned tasks if not already there
+    if (!volunteer.assignedTasks.includes(incident._id)) {
+      volunteer.assignedTasks.push(incident._id);
+      await volunteer.save();
+    }
+
+    const updatedIncident = await Incident.findById(incident._id)
+      .populate('reporterId', 'firstName lastName email')
+      .populate('assignedTo', 'firstName lastName email')
+      .populate('verifiedBy', 'firstName lastName email');
+
+    res.json({
+      success: true,
+      data: updatedIncident
+    });
+  } catch (error) {
+    console.error('Assign incident error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
+// @route   PUT /api/admin/volunteers/:volunteerId/location
+// @desc    Update volunteer location (Admin only)
+// @access  Private/Admin
+router.put('/volunteers/:volunteerId/location', async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    const volunteer = await User.findById(req.params.volunteerId);
+
+    if (!volunteer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Volunteer not found'
+      });
+    }
+
+    if (volunteer.role !== 'volunteer') {
+      return res.status(400).json({
+        success: false,
+        message: 'User is not a volunteer'
+      });
+    }
+
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid latitude and longitude are required'
+      });
+    }
+
+    volunteer.currentLocation = {
+      lat: parseFloat(lat),
+      lng: parseFloat(lng)
+    };
+
+    await volunteer.save();
+
+    res.json({
+      success: true,
+      data: volunteer
+    });
+  } catch (error) {
+    console.error('Update volunteer location error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 module.exports = router;
 

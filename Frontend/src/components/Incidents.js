@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Navigation from './Navigation';
-import { getSession, getIncidents, saveIncidents } from '../utils/storage';
+import { getSession } from '../utils/storage';
+import { incidentsAPI } from '../utils/api';
 import { formatTime, getSeverityText, getSeverityColor } from '../utils/format';
 import { showNotification } from '../utils/notifications';
 
@@ -54,8 +55,24 @@ const Incidents = () => {
     }
   }, [incidents, activeFilter]);
 
-  const loadIncidents = () => {
-    setIncidents(getIncidents());
+  const loadIncidents = async () => {
+    try {
+      console.log('Incidents: Loading incidents...');
+      const response = await incidentsAPI.getAll();
+      console.log('Incidents: Response:', response);
+      
+      if (response.success) {
+        const incidentsData = response.data || [];
+        console.log('Incidents: Setting incidents:', incidentsData.length);
+        setIncidents(incidentsData);
+      } else {
+        console.error('Incidents: Response not successful:', response);
+        showNotification('Failed to load incidents', 'error');
+      }
+    } catch (error) {
+      console.error('Incidents: Error loading incidents:', error);
+      showNotification(error.message || 'Failed to load incidents', 'error');
+    }
   };
 
   const getFilteredIncidents = () => {
@@ -89,37 +106,53 @@ const Incidents = () => {
     return filtered;
   };
 
-  const assignIncident = (incidentId) => {
-    const updatedIncidents = incidents.map(incident => {
-      if (incident.id === incidentId) {
-        return {
-          ...incident,
-          status: 'assigned',
-          assignedTo: 'VOL-001',
-          assignedVolunteers: ['VOL-001']
-        };
+  const assignIncident = async (incidentId) => {
+    try {
+      console.log('Incidents: Assigning incident:', incidentId);
+      const response = await incidentsAPI.update(incidentId, {
+        status: 'assigned'
+      });
+      console.log('Incidents: Assign response:', response);
+      
+      if (response.success) {
+        showNotification(`Incident ${incidentId} assigned`, 'success');
+        // Reload after a short delay
+        setTimeout(async () => {
+          await loadIncidents();
+        }, 300);
+      } else {
+        showNotification(response.message || 'Failed to assign incident', 'error');
       }
-      return incident;
-    });
-    saveIncidents(updatedIncidents);
-    setIncidents(updatedIncidents);
-    showNotification(`Incident ${incidentId} assigned`, 'success');
+    } catch (error) {
+      console.error('Incidents: Error assigning incident:', error);
+      showNotification(error.message || 'Failed to assign incident', 'error');
+    }
   };
 
-  const updateStatus = (incidentId, newStatus) => {
-    const updatedIncidents = incidents.map(incident => {
-      if (incident.id === incidentId) {
-        return {
-          ...incident,
-          status: newStatus,
-          resolvedAt: newStatus === 'completed' ? new Date() : incident.resolvedAt
-        };
+  const updateStatus = async (incidentId, newStatus) => {
+    try {
+      console.log('Incidents: Updating status:', incidentId, newStatus);
+      const updateData = { status: newStatus };
+      if (newStatus === 'completed') {
+        updateData.resolvedAt = new Date();
       }
-      return incident;
-    });
-    saveIncidents(updatedIncidents);
-    setIncidents(updatedIncidents);
-    showNotification(`Incident ${incidentId} status updated`, 'success');
+      
+      const response = await incidentsAPI.update(incidentId, updateData);
+      console.log('Incidents: Update response:', response);
+      
+      if (response.success) {
+        showNotification(`Incident ${incidentId} status updated`, 'success');
+        // Reload after a short delay
+        setTimeout(async () => {
+          await loadIncidents();
+        }, 300);
+      } else {
+        showNotification(response.message || 'Failed to update incident', 'error');
+      }
+    } catch (error) {
+      console.error('Incidents: Error updating incident:', error);
+      showNotification(error.message || 'Failed to update incident', 'error');
+    }
   };
 
   const initializeMap = () => {
@@ -183,8 +216,24 @@ const Incidents = () => {
       }
 
       // Show filtered incidents (all incidents with location)
-      const filteredIncidents = getFilteredIncidents().filter(i => i.location);
+      const filteredIncidents = getFilteredIncidents().filter(i => {
+        if (!i.location) return false;
+        const lat = i.location.lat || (i.location.coordinates && i.location.coordinates[1]);
+        const lng = i.location.lng || (i.location.coordinates && i.location.coordinates[0]);
+        return lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+      });
+      
+      console.log('Incidents: Updating map with', filteredIncidents.length, 'incidents');
+      
       filteredIncidents.forEach(incident => {
+        // Get coordinates - handle different data structures
+        const lat = incident.location.lat || (incident.location.coordinates && incident.location.coordinates[1]) || incident.location[1];
+        const lng = incident.location.lng || (incident.location.coordinates && incident.location.coordinates[0]) || incident.location[0];
+        
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          console.warn('Invalid location for incident:', incident.id, incident.location);
+          return;
+        }
         const color = incident.severity === 5 ? '#8e44ad' : 
                      incident.severity === 4 ? '#e74c3c' : 
                      incident.severity === 3 ? '#e67e22' : 
@@ -194,7 +243,7 @@ const Incidents = () => {
         const markerColor = isVerified ? color : '#f59e0b';
         const opacity = isVerified ? 0.8 : 0.6;
         
-        const marker = window.L.circleMarker([incident.location.lat, incident.location.lng], {
+        const marker = window.L.circleMarker([lat, lng], {
           radius: 8,
           fillColor: markerColor,
           color: '#ffffff',
