@@ -42,6 +42,46 @@ const incidentSchema = new mongoose.Schema({
     min: 1,
     default: 1
   },
+  // Additional incident details
+  contactInfo: {
+    phone: String,
+    email: String,
+    alternateContact: String
+  },
+  affectedPeople: {
+    injured: { type: Number, default: 0 },
+    deceased: { type: Number, default: 0 },
+    evacuated: { type: Number, default: 0 },
+    totalAffected: { type: Number, default: 0 }
+  },
+  propertyDamage: {
+    type: String,
+    enum: ['none', 'minor', 'moderate', 'severe', 'total'],
+    default: 'none'
+  },
+  urgency: {
+    type: String,
+    enum: ['immediate', 'within-hours', 'within-day', 'within-week'],
+    default: 'within-day'
+  },
+  resourcesNeeded: [{
+    type: String,
+    enum: ['medical-supplies', 'food-water', 'shelter', 'clothing', 'transportation', 'heavy-equipment', 'communication', 'power-generators', 'other']
+  }],
+  weatherConditions: {
+    type: String,
+    enum: ['clear', 'rainy', 'stormy', 'snowy', 'foggy', 'windy', 'other'],
+    description: String
+  },
+  incidentTime: {
+    type: Date,
+    default: Date.now
+  },
+  additionalDetails: {
+    observations: String,
+    hazards: String,
+    accessibility: String
+  },
   timestamp: {
     type: Date,
     default: Date.now

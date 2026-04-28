@@ -232,6 +232,10 @@ export const adminAPI = {
   getDispatchRecommendations: async (incidentId) => {
     return apiRequest(`/admin/dispatch/${incidentId}`);
   },
+
+  getAuditLogs: async () => {
+    return apiRequest('/audit');
+  }
 };
 
 export const groupsAPI = {

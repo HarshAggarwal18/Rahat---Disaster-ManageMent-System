@@ -14,6 +14,7 @@ const Auth = () => {
     password: "",
     role: "user",
   });
+  const [formErrors, setFormErrors] = useState({});
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -28,8 +29,12 @@ const Auth = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     const { email, password } = loginForm;
-    if (!email || !password) {
-      showNotification("Please fill in all fields", "error");
+    const errors = {};
+    if (!email) errors.email = 'Email is required.';
+    if (!password) errors.password = 'Password is required.';
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      showNotification("Please fix the login form errors", "error");
       return;
     }
     setLoading(true);
@@ -54,8 +59,15 @@ const Auth = () => {
   const handleSignup = async (e) => {
     e.preventDefault();
     const { firstName, lastName, email, password, role } = signupForm;
-    if (!firstName || !lastName || !email || !password) {
-      showNotification("Please fill in all fields", "error");
+    const errors = {};
+    if (!firstName) errors.firstName = 'First name is required.';
+    if (!lastName) errors.lastName = 'Last name is required.';
+    if (!email) errors.email = 'Email is required.';
+    if (!password) errors.password = 'Password is required.';
+    if (password && password.length < 6) errors.password = 'Password must be at least 6 characters.';
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      showNotification("Please fix the signup form errors", "error");
       return;
     }
     setLoading(true);
@@ -122,22 +134,30 @@ const Auth = () => {
                 <input
                   type="email"
                   value={loginForm.email}
-                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                  onChange={(e) => {
+                    setFormErrors({ ...formErrors, email: '' });
+                    setLoginForm({ ...loginForm, email: e.target.value });
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 text-white p-4 rounded-2xl outline-none"
                   placeholder="name@agency.gov"
                   required
                 />
+                {formErrors.email && <p className="text-rose-400 text-xs mt-1">{formErrors.email}</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Password</label>
                 <input
                   type="password"
                   value={loginForm.password}
-                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                  onChange={(e) => {
+                    setFormErrors({ ...formErrors, password: '' });
+                    setLoginForm({ ...loginForm, password: e.target.value });
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 text-white p-4 rounded-2xl outline-none"
                   placeholder="••••••••"
                   required
                 />
+                {formErrors.password && <p className="text-rose-400 text-xs mt-1">{formErrors.password}</p>}
               </div>
               <button
                 type="submit"
@@ -154,30 +174,42 @@ const Auth = () => {
                 <input
                   type="text"
                   value={signupForm.firstName}
-                  onChange={(e) => setSignupForm({ ...signupForm, firstName: e.target.value })}
+                  onChange={(e) => {
+                    setFormErrors({ ...formErrors, firstName: '' });
+                    setSignupForm({ ...signupForm, firstName: e.target.value });
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 text-white p-4 rounded-2xl outline-none"
                   required
                 />
+                {formErrors.firstName && <p className="text-rose-400 text-xs mt-1">{formErrors.firstName}</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Last Name</label>
                 <input
                   type="text"
                   value={signupForm.lastName}
-                  onChange={(e) => setSignupForm({ ...signupForm, lastName: e.target.value })}
+                  onChange={(e) => {
+                    setFormErrors({ ...formErrors, lastName: '' });
+                    setSignupForm({ ...signupForm, lastName: e.target.value });
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 text-white p-4 rounded-2xl outline-none"
                   required
                 />
+                {formErrors.lastName && <p className="text-rose-400 text-xs mt-1">{formErrors.lastName}</p>}
               </div>
               <div className="col-span-2 space-y-2">
                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Email</label>
                 <input
                   type="email"
                   value={signupForm.email}
-                  onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })}
+                  onChange={(e) => {
+                    setFormErrors({ ...formErrors, email: '' });
+                    setSignupForm({ ...signupForm, email: e.target.value });
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 text-white p-4 rounded-2xl outline-none"
                   required
                 />
+                {formErrors.email && <p className="text-rose-400 text-xs mt-1">{formErrors.email}</p>}
               </div>
               <div className="col-span-2 space-y-2">
                 <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Role</label>
@@ -196,10 +228,14 @@ const Auth = () => {
                 <input
                   type="password"
                   value={signupForm.password}
-                  onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
+                  onChange={(e) => {
+                    setFormErrors({ ...formErrors, password: '' });
+                    setSignupForm({ ...signupForm, password: e.target.value });
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 text-white p-4 rounded-2xl outline-none"
                   required
                 />
+                {formErrors.password && <p className="text-rose-400 text-xs mt-1">{formErrors.password}</p>}
               </div>
               <button
                 type="submit"

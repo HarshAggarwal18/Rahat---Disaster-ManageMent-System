@@ -9,12 +9,29 @@ import { socket } from '../utils/socket';
 const UserDashboard = () => {
   const [user, setUser] = useState(null);
   const [incidents, setIncidents] = useState([]);
+  const [formErrors, setFormErrors] = useState({});
   const [formData, setFormData] = useState({
     type: '',
     severity: '',
     description: '',
     location: null,
-    peopleRequired: 1
+    peopleRequired: 1,
+    // New fields
+    contactPhone: '',
+    contactEmail: '',
+    urgency: 'within-day',
+    affectedInjured: 0,
+    affectedDeceased: 0,
+    affectedEvacuated: 0,
+    affectedTotal: 0,
+    propertyDamage: 'none',
+    resourcesNeeded: [],
+    weatherConditions: '',
+    weatherDescription: '',
+    incidentTime: '',
+    observations: '',
+    hazards: '',
+    accessibility: ''
   });
   const [selectedLocation, setSelectedLocation] = useState(null);
   const mapRef = useRef(null);
@@ -367,25 +384,44 @@ const UserDashboard = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!formData.type || !formData.severity || !formData.description) {
-      showNotification('Please fill in all required fields', 'error');
+    const errors = {};
+
+    if (!formData.type) {
+      errors.type = 'Incident type is required.';
+    }
+    if (!formData.severity) {
+      errors.severity = 'Severity level is required.';
+    }
+    if (!formData.description || formData.description.trim().length < 12) {
+      errors.description = 'Provide a clear description (at least 12 characters).';
+    }
+    if (!formData.location || !formData.location.lat || !formData.location.lng) {
+      errors.location = 'Select a location on the map or use GPS.';
+    }
+    if (!formData.peopleRequired || formData.peopleRequired < 1) {
+      errors.peopleRequired = 'At least 1 person is required.';
+    }
+    if (!formData.contactPhone && !formData.contactEmail) {
+      errors.contact = 'At least one contact method (phone or email) is required.';
+    }
+    if (formData.contactPhone && !/^\+?[\d\s\-\(\)]{10,}$/.test(formData.contactPhone.replace(/\s/g, ''))) {
+      errors.contactPhone = 'Please enter a valid phone number.';
+    }
+    if (formData.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactEmail)) {
+      errors.contactEmail = 'Please enter a valid email address.';
+    }
+    if (formData.affectedTotal < (formData.affectedInjured + formData.affectedDeceased + formData.affectedEvacuated)) {
+      errors.affectedTotal = 'Total affected should be at least the sum of injured, deceased, and evacuated.';
+    }
+
+    setFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      showNotification('Please fix the form errors and resubmit.', 'error');
       return;
     }
-    
+
     try {
-      // Validate location
-      if (!formData.location || !formData.location.lat || !formData.location.lng) {
-        showNotification('Please select a location on the map or use GPS', 'error');
-        return;
-      }
-
-      // Validate all fields
-      if (!formData.type || !formData.severity || !formData.description) {
-        showNotification('Please fill in all required fields', 'error');
-        return;
-      }
-
       const incidentData = {
         type: formData.type,
         severity: parseInt(formData.severity),
@@ -394,20 +430,65 @@ const UserDashboard = () => {
           lat: parseFloat(formData.location.lat),
           lng: parseFloat(formData.location.lng)
         },
-        peopleRequired: parseInt(formData.peopleRequired || 1)
+        peopleRequired: parseInt(formData.peopleRequired || 1),
+        // New fields
+        contactInfo: {
+          phone: formData.contactPhone || undefined,
+          email: formData.contactEmail || undefined,
+          alternateContact: formData.alternateContact || undefined
+        },
+        affectedPeople: {
+          injured: parseInt(formData.affectedInjured || 0),
+          deceased: parseInt(formData.affectedDeceased || 0),
+          evacuated: parseInt(formData.affectedEvacuated || 0),
+          totalAffected: parseInt(formData.affectedTotal || 0)
+        },
+        propertyDamage: formData.propertyDamage,
+        urgency: formData.urgency,
+        resourcesNeeded: formData.resourcesNeeded,
+        weatherConditions: formData.weatherConditions ? {
+          type: formData.weatherConditions,
+          description: formData.weatherDescription || undefined
+        } : undefined,
+        incidentTime: formData.incidentTime ? new Date(formData.incidentTime) : new Date(),
+        additionalDetails: {
+          observations: formData.observations || undefined,
+          hazards: formData.hazards || undefined,
+          accessibility: formData.accessibility || undefined
+        }
       };
 
-          console.log('Creating incident with data:', incidentData);
-          
-          const response = await incidentsAPI.create(incidentData);
-
-          console.log('Incident creation response:', response);
+      console.log('Creating incident with data:', incidentData);
+      const response = await incidentsAPI.create(incidentData);
+      console.log('Incident creation response:', response);
 
       if (response.success) {
         showNotification('Incident reported successfully!', 'success');
         
         // Reset form first
-        setFormData({ type: '', severity: '', description: '', location: null, peopleRequired: 1 });
+        setFormData({ 
+          type: '', 
+          severity: '', 
+          description: '', 
+          location: null, 
+          peopleRequired: 1,
+          // Reset new fields
+          contactPhone: '',
+          contactEmail: '',
+          urgency: 'within-day',
+          affectedInjured: 0,
+          affectedDeceased: 0,
+          affectedEvacuated: 0,
+          affectedTotal: 0,
+          propertyDamage: 'none',
+          resourcesNeeded: [],
+          weatherConditions: '',
+          weatherDescription: '',
+          incidentTime: '',
+          observations: '',
+          hazards: '',
+          accessibility: ''
+        });
         setSelectedLocation(null);
         
         // Clear location markers
@@ -465,91 +546,387 @@ const UserDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Report New Incident</h3>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Incident Type</label>
-                    <select
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                      className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
-                      required
-                    >
-                      <option value="">Select Type</option>
-                      <option value="fire">🔥 Fire</option>
-                      <option value="medical">🏥 Medical Emergency</option>
-                      <option value="flood">🌊 Flooding</option>
-                      <option value="storm">⛈️ Storm</option>
-                      <option value="accident">🚗 Traffic Accident</option>
-                      <option value="earthquake">🌍 Earthquake</option>
-                      <option value="other">❓ Other</option>
-                    </select>
+              <h3 className="text-lg font-semibold text-white mb-6">Report New Incident</h3>
+              <form onSubmit={handleSubmit} className="space-y-8">
+                {/* Basic Information Section */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <h4 className="text-md font-medium text-slate-200 mb-4 flex items-center">
+                    📋 Basic Information
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Incident Type *</label>
+                      <select
+                        value={formData.type}
+                        onChange={(e) => {
+                          setFormErrors({ ...formErrors, type: '' });
+                          setFormData({ ...formData, type: e.target.value });
+                        }}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Select Type</option>
+                        <option value="fire">🔥 Fire</option>
+                        <option value="medical">🏥 Medical Emergency</option>
+                        <option value="flood">🌊 Flooding</option>
+                        <option value="storm">⛈️ Storm</option>
+                        <option value="accident">🚗 Traffic Accident</option>
+                        <option value="earthquake">🌍 Earthquake</option>
+                        <option value="other">❓ Other</option>
+                      </select>
+                      {formErrors.type && <p className="text-rose-400 text-xs mt-1">{formErrors.type}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Severity Level *</label>
+                      <select
+                        value={formData.severity}
+                        onChange={(e) => {
+                          setFormErrors({ ...formErrors, severity: '' });
+                          setFormData({ ...formData, severity: e.target.value });
+                        }}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Select Severity</option>
+                        <option value="1">🟢 Low</option>
+                        <option value="2">🟡 Medium</option>
+                        <option value="3">🟠 High</option>
+                        <option value="4">🔴 Critical</option>
+                        <option value="5">🟣 Emergency</option>
+                      </select>
+                      {formErrors.severity && <p className="text-rose-400 text-xs mt-1">{formErrors.severity}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Severity Level</label>
-                    <select
-                      value={formData.severity}
-                      onChange={(e) => setFormData({ ...formData, severity: e.target.value })}
-                      className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Description *</label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => {
+                        setFormErrors({ ...formErrors, description: '' });
+                        setFormData({ ...formData, description: e.target.value });
+                      }}
+                      rows="4"
+                      className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Describe the incident in detail. Include what happened, when it occurred, and any immediate dangers..."
                       required
-                    >
-                      <option value="">Select Severity</option>
-                      <option value="1">🟢 Low</option>
-                      <option value="2">🟡 Medium</option>
-                      <option value="3">🟠 High</option>
-                      <option value="4">🔴 Critical</option>
-                      <option value="5">🟣 Emergency</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows="4"
-                    className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
-                    placeholder="Describe the incident in detail..."
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">People Required</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={formData.peopleRequired}
-                    onChange={(e) => setFormData({ ...formData, peopleRequired: e.target.value })}
-                    className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Location</label>
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={selectedLocation ? `${selectedLocation.lat.toFixed(6)}, ${selectedLocation.lng.toFixed(6)}` : ''}
-                      className="flex-1 p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
-                      placeholder="Click on map or use GPS"
-                      readOnly
                     />
-                    <button
-                      type="button"
-                      onClick={getCurrentLocation}
-                      className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700"
-                    >
-                      📍 GPS
-                    </button>
+                    {formErrors.description && <p className="text-rose-400 text-xs mt-1">{formErrors.description}</p>}
                   </div>
                 </div>
+
+                {/* Contact Information Section */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <h4 className="text-md font-medium text-slate-200 mb-4 flex items-center">
+                    📞 Contact Information
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Phone Number</label>
+                      <input
+                        type="tel"
+                        value={formData.contactPhone}
+                        onChange={(e) => {
+                          setFormErrors({ ...formErrors, contactPhone: '' });
+                          setFormData({ ...formData, contactPhone: e.target.value });
+                        }}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="+1 (555) 123-4567"
+                      />
+                      {formErrors.contactPhone && <p className="text-rose-400 text-xs mt-1">{formErrors.contactPhone}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+                      <input
+                        type="email"
+                        value={formData.contactEmail}
+                        onChange={(e) => {
+                          setFormErrors({ ...formErrors, contactEmail: '' });
+                          setFormData({ ...formData, contactEmail: e.target.value });
+                        }}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="your.email@example.com"
+                      />
+                      {formErrors.contactEmail && <p className="text-rose-400 text-xs mt-1">{formErrors.contactEmail}</p>}
+                    </div>
+                  </div>
+                  {formErrors.contact && <p className="text-rose-400 text-xs mt-2">{formErrors.contact}</p>}
+                </div>
+
+                {/* Impact Assessment Section */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <h4 className="text-md font-medium text-slate-200 mb-4 flex items-center">
+                    👥 Impact Assessment
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">People Required *</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="1000"
+                        value={formData.peopleRequired}
+                        onChange={(e) => {
+                          setFormErrors({ ...formErrors, peopleRequired: '' });
+                          setFormData({ ...formData, peopleRequired: e.target.value });
+                        }}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                      {formErrors.peopleRequired && <p className="text-rose-400 text-xs mt-1">{formErrors.peopleRequired}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Injured</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.affectedInjured}
+                        onChange={(e) => setFormData({ ...formData, affectedInjured: e.target.value })}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Deceased</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.affectedDeceased}
+                        onChange={(e) => setFormData({ ...formData, affectedDeceased: e.target.value })}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Evacuated</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.affectedEvacuated}
+                        onChange={(e) => setFormData({ ...formData, affectedEvacuated: e.target.value })}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Total Affected</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.affectedTotal}
+                        onChange={(e) => {
+                          setFormErrors({ ...formErrors, affectedTotal: '' });
+                          setFormData({ ...formData, affectedTotal: e.target.value });
+                        }}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                      {formErrors.affectedTotal && <p className="text-rose-400 text-xs mt-1">{formErrors.affectedTotal}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Property Damage</label>
+                      <select
+                        value={formData.propertyDamage}
+                        onChange={(e) => setFormData({ ...formData, propertyDamage: e.target.value })}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="none">No Damage</option>
+                        <option value="minor">Minor Damage</option>
+                        <option value="moderate">Moderate Damage</option>
+                        <option value="severe">Severe Damage</option>
+                        <option value="total">Total Destruction</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Response Requirements Section */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <h4 className="text-md font-medium text-slate-200 mb-4 flex items-center">
+                    🚨 Response Requirements
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Urgency Level</label>
+                      <select
+                        value={formData.urgency}
+                        onChange={(e) => setFormData({ ...formData, urgency: e.target.value })}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="immediate">🚨 Immediate (within minutes)</option>
+                        <option value="within-hours">⏰ Within Hours</option>
+                        <option value="within-day">📅 Within 24 Hours</option>
+                        <option value="within-week">📆 Within a Week</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Incident Time</label>
+                      <input
+                        type="datetime-local"
+                        value={formData.incidentTime}
+                        onChange={(e) => setFormData({ ...formData, incidentTime: e.target.value })}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Resources Needed</label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {[
+                        { value: 'medical-supplies', label: '🏥 Medical Supplies' },
+                        { value: 'food-water', label: '🍽️ Food & Water' },
+                        { value: 'shelter', label: '🏠 Shelter' },
+                        { value: 'clothing', label: '👕 Clothing' },
+                        { value: 'transportation', label: '🚗 Transportation' },
+                        { value: 'heavy-equipment', label: '🚛 Heavy Equipment' },
+                        { value: 'communication', label: '📡 Communication' },
+                        { value: 'power-generators', label: '⚡ Power Generators' },
+                        { value: 'other', label: '❓ Other' }
+                      ].map(resource => (
+                        <label key={resource.value} className="flex items-center space-x-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={formData.resourcesNeeded.includes(resource.value)}
+                            onChange={(e) => {
+                              const updated = e.target.checked
+                                ? [...formData.resourcesNeeded, resource.value]
+                                : formData.resourcesNeeded.filter(r => r !== resource.value);
+                              setFormData({ ...formData, resourcesNeeded: updated });
+                            }}
+                            className="rounded border-slate-700 bg-slate-950 text-blue-500 focus:ring-blue-500"
+                          />
+                          <span className="text-slate-300">{resource.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Environmental Conditions Section */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <h4 className="text-md font-medium text-slate-200 mb-4 flex items-center">
+                    🌤️ Environmental Conditions
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Weather Conditions</label>
+                      <select
+                        value={formData.weatherConditions}
+                        onChange={(e) => setFormData({ ...formData, weatherConditions: e.target.value })}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select Weather</option>
+                        <option value="clear">☀️ Clear</option>
+                        <option value="rainy">🌧️ Rainy</option>
+                        <option value="stormy">⛈️ Stormy</option>
+                        <option value="snowy">❄️ Snowy</option>
+                        <option value="foggy">🌫️ Foggy</option>
+                        <option value="windy">💨 Windy</option>
+                        <option value="other">❓ Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Weather Description</label>
+                      <input
+                        type="text"
+                        value={formData.weatherDescription}
+                        onChange={(e) => setFormData({ ...formData, weatherDescription: e.target.value })}
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Additional weather details..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location Section */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <h4 className="text-md font-medium text-slate-200 mb-4 flex items-center">
+                    📍 Location & Accessibility
+                  </h4>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Incident Location *</label>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={selectedLocation ? `${selectedLocation.lat.toFixed(6)}, ${selectedLocation.lng.toFixed(6)}` : ''}
+                        className="flex-1 p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Click on map or use GPS"
+                        readOnly
+                      />
+                      <button
+                        type="button"
+                        onClick={getCurrentLocation}
+                        className="bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        📍 GPS
+                      </button>
+                    </div>
+                    {formErrors.location && <p className="text-rose-400 text-xs mt-1">{formErrors.location}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Site Accessibility</label>
+                    <textarea
+                      value={formData.accessibility}
+                      onChange={(e) => setFormData({ ...formData, accessibility: e.target.value })}
+                      rows="2"
+                      className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Describe road conditions, access points, obstacles..."
+                    />
+                  </div>
+                </div>
+
+                {/* Additional Details Section */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <h4 className="text-md font-medium text-slate-200 mb-4 flex items-center">
+                    📝 Additional Details
+                  </h4>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Key Observations</label>
+                      <textarea
+                        value={formData.observations}
+                        onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
+                        rows="3"
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Any important observations about the situation..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Hazards & Risks</label>
+                      <textarea
+                        value={formData.hazards}
+                        onChange={(e) => setFormData({ ...formData, hazards: e.target.value })}
+                        rows="3"
+                        className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Describe any ongoing hazards, risks, or safety concerns..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {formData.description && (
+                  <div className="bg-slate-950/80 rounded-2xl border border-slate-700 p-4 text-slate-200">
+                    <h4 className="text-sm font-semibold mb-2 flex items-center">
+                      🤖 AI Preview
+                    </h4>
+                    <p className="text-xs text-slate-400 mb-2">
+                      Suggested priority: {formData.severity ? ['Low','Medium','High','Critical','Emergency'][parseInt(formData.severity) - 1] : 'TBD'}
+                    </p>
+                    <p className="text-sm">{formData.description.length > 120 ? `${formData.description.slice(0, 117)}...` : formData.description}</p>
+                    {formData.resourcesNeeded.length > 0 && (
+                      <p className="text-xs text-slate-400 mt-2">
+                        Resources flagged: {formData.resourcesNeeded.join(', ')}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <button
                   type="submit"
-                  className="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg font-medium"
+                  className="w-full bg-red-600 hover:bg-red-700 text-white py-4 px-4 rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
                 >
-                  🚨 Report Incident
+                  <span>🚨 Report Incident</span>
                 </button>
               </form>
             </div>

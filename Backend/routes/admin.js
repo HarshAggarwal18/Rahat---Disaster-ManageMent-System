@@ -4,6 +4,7 @@ const Incident = require('../models/Incident');
 const { protect, authorize } = require('../middleware/auth');
 const { getVolunteerRecommendations } = require('../utils/incidentDispatch');
 const { sendEmail, incidentAssignedEmail } = require('../utils/email');
+const { createAuditLog } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -140,6 +141,11 @@ router.post('/verify-incident/:incidentId', async (req, res) => {
       io.emit('incident:updated', updatedIncident);
     }
 
+    await createAuditLog(req, 'verify_incident', 'Incident', incident.id, {
+      status: incident.status,
+      verified: true
+    });
+
     res.json({
       success: true,
       data: updatedIncident
@@ -173,6 +179,10 @@ router.post('/reject-incident/:incidentId', async (req, res) => {
     if (io) {
       io.emit('incident:deleted', { id: incident.id });
     }
+
+    await createAuditLog(req, 'reject_incident', 'Incident', incident.id, {
+      reason: 'rejected by admin'
+    });
 
     res.json({
       success: true,
@@ -210,8 +220,14 @@ router.put('/users/:userId/role', async (req, res) => {
       });
     }
 
+    const previousRole = user.role;
     user.role = role;
     await user.save();
+
+    await createAuditLog(req, 'update_user_role', 'User', user._id.toString(), {
+      previousRole,
+      updatedRole: role
+    });
 
     res.json({
       success: true,
@@ -249,8 +265,14 @@ router.put('/users/:userId/status', async (req, res) => {
       });
     }
 
+    const previousStatus = user.status;
     user.status = status;
     await user.save();
+
+    await createAuditLog(req, 'update_user_status', 'User', user._id.toString(), {
+      previousStatus,
+      updatedStatus: status
+    });
 
     res.json({
       success: true,
@@ -323,6 +345,11 @@ router.post('/assign-incident/:incidentId', async (req, res) => {
     if (io) {
       io.emit('incident:updated', updatedIncident);
     }
+
+    await createAuditLog(req, 'assign_incident', 'Incident', incident.id, {
+      assignedVolunteerId: volunteer._id.toString(),
+      assignedVolunteerName: `${volunteer.firstName} ${volunteer.lastName}`
+    });
 
     try {
       if (volunteer.email) {

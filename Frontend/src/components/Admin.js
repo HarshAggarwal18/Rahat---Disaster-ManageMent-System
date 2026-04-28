@@ -16,6 +16,7 @@ const Admin = () => {
   const [groups, setGroups] = useState([]);
   const [groupForm, setGroupForm] = useState({ name: '', notes: '', members: [] });
   const [groupAssign, setGroupAssign] = useState({ groupId: '', incidentId: '' });
+  const [auditLogs, setAuditLogs] = useState([]);
   const [activeSection, setActiveSection] = useState('dashboard');
   const [verificationFilter, setVerificationFilter] = useState('all');
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -164,6 +165,16 @@ const Admin = () => {
         }
       } catch (groupError) {
         console.error('Admin: Error loading groups:', groupError);
+      }
+
+      // Load audit logs
+      try {
+        const logsResponse = await adminAPI.getAuditLogs();
+        if (logsResponse.success) {
+          setAuditLogs(logsResponse.data || []);
+        }
+      } catch (auditError) {
+        console.error('Admin: Error loading audit logs:', auditError);
       }
     } catch (error) {
       console.error('Admin: Error loading data:', error);
@@ -1098,51 +1109,79 @@ const Admin = () => {
           )}
 
           {activeSection === 'settings' && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">System Settings</h3>
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-md font-medium text-gray-700 mb-3">General Settings</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">System Name</label>
-                      <input 
-                        type="text" 
-                        className="w-full p-2 border border-gray-300 rounded-md" 
-                        defaultValue="Disaster Response System"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Alert Threshold</label>
-                      <input 
-                        type="number" 
-                        className="w-full p-2 border border-gray-300 rounded-md" 
-                        defaultValue="5"
-                      />
+            <div className="space-y-6">
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">System Settings</h3>
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-md font-medium text-gray-700 mb-3">General Settings</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">System Name</label>
+                        <input 
+                          type="text" 
+                          className="w-full p-2 border border-gray-300 rounded-md" 
+                          defaultValue="Disaster Response System"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Alert Threshold</label>
+                        <input 
+                          type="number" 
+                          className="w-full p-2 border border-gray-300 rounded-md" 
+                          defaultValue="5"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div>
-                  <h4 className="text-md font-medium text-gray-700 mb-3">Notification Settings</h4>
-                  <div className="space-y-3">
-                    <label className="flex items-center">
-                      <input type="checkbox" className="mr-3" defaultChecked />
-                      <span className="text-sm text-gray-700">Email notifications for critical incidents</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input type="checkbox" className="mr-3" defaultChecked />
-                      <span className="text-sm text-gray-700">SMS alerts for emergency situations</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input type="checkbox" className="mr-3" />
-                      <span className="text-sm text-gray-700">Daily system reports</span>
-                    </label>
+                  <div>
+                    <h4 className="text-md font-medium text-gray-700 mb-3">Notification Settings</h4>
+                    <div className="space-y-3">
+                      <label className="flex items-center">
+                        <input type="checkbox" className="mr-3" defaultChecked />
+                        <span className="text-sm text-gray-700">Email notifications for critical incidents</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="mr-3" defaultChecked />
+                        <span className="text-sm text-gray-700">SMS alerts for emergency situations</span>
+                      </label>
+                      <label className="flex items-center">
+                        <input type="checkbox" className="mr-3" />
+                        <span className="text-sm text-gray-700">Daily system reports</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div className="pt-4">
+                    <button className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                      Save Settings
+                    </button>
                   </div>
                 </div>
-                <div className="pt-4">
-                  <button className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors">
-                    Save Settings
-                  </button>
+              </div>
+              <div className="bg-white rounded-lg shadow-sm p-6 mt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Audit Log</h3>
+                  <span className="text-sm text-slate-500">Recent admin activity</span>
+                </div>
+                <div className="space-y-3">
+                  {auditLogs.length === 0 ? (
+                    <p className="text-sm text-slate-500">No audit events found yet.</p>
+                  ) : (
+                    auditLogs.slice(0, 6).map((log) => (
+                      <div key={log._id} className="border border-slate-200 rounded-lg p-3 bg-slate-50/80">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{log.action.replace(/_/g, ' ')}</p>
+                            <p className="text-xs text-slate-500">{new Date(log.timestamp).toLocaleString()}</p>
+                          </div>
+                          <span className="text-xs uppercase tracking-wider text-slate-600 bg-slate-200 px-2 py-1 rounded-full">
+                            {log.role}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-600 mt-2">User: {log.userName} • {log.entityType} {log.entityId}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

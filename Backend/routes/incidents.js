@@ -4,6 +4,7 @@ const Incident = require('../models/Incident');
 const User = require('../models/User');
 const { sendEmail, incidentReportedEmail } = require('../utils/email');
 const { protect } = require('../middleware/auth');
+const { createAuditLog } = require('../utils/auditLogger');
 const { generateIncidentId } = require('../utils/generateId');
 const { buildIncidentAI } = require('../utils/incidentAI');
 
@@ -84,7 +85,19 @@ router.post('/', protect, [
   body('description').trim().notEmpty().withMessage('Description is required'),
   body('location.lat').isFloat().withMessage('Valid latitude is required'),
   body('location.lng').isFloat().withMessage('Valid longitude is required'),
-  body('peopleRequired').optional().isInt({ min: 1, max: 100 }).withMessage('People required must be between 1 and 100')
+  body('peopleRequired').optional().isInt({ min: 1, max: 1000 }).withMessage('People required must be between 1 and 1000'),
+  body('contactInfo.phone').optional().isMobilePhone().withMessage('Invalid phone number'),
+  body('contactInfo.email').optional().isEmail().withMessage('Invalid email address'),
+  body('affectedPeople.injured').optional().isInt({ min: 0 }).withMessage('Injured count must be non-negative'),
+  body('affectedPeople.deceased').optional().isInt({ min: 0 }).withMessage('Deceased count must be non-negative'),
+  body('affectedPeople.evacuated').optional().isInt({ min: 0 }).withMessage('Evacuated count must be non-negative'),
+  body('affectedPeople.totalAffected').optional().isInt({ min: 0 }).withMessage('Total affected must be non-negative'),
+  body('propertyDamage').optional().isIn(['none', 'minor', 'moderate', 'severe', 'total']).withMessage('Invalid property damage level'),
+  body('urgency').optional().isIn(['immediate', 'within-hours', 'within-day', 'within-week']).withMessage('Invalid urgency level'),
+  body('resourcesNeeded').optional().isArray().withMessage('Resources needed must be an array'),
+  body('resourcesNeeded.*').optional().isIn(['medical-supplies', 'food-water', 'shelter', 'clothing', 'transportation', 'heavy-equipment', 'communication', 'power-generators', 'other']).withMessage('Invalid resource type'),
+  body('weatherConditions.type').optional().isIn(['clear', 'rainy', 'stormy', 'snowy', 'foggy', 'windy', 'other']).withMessage('Invalid weather condition'),
+  body('incidentTime').optional().isISO8601().withMessage('Invalid incident time format')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -97,7 +110,21 @@ router.post('/', protect, [
       });
     }
 
-    const { type, severity, description, location, peopleRequired } = req.body;
+    const { 
+      type, 
+      severity, 
+      description, 
+      location, 
+      peopleRequired,
+      contactInfo,
+      affectedPeople,
+      propertyDamage,
+      urgency,
+      resourcesNeeded,
+      weatherConditions,
+      incidentTime,
+      additionalDetails
+    } = req.body;
 
     // Generate unique incident ID
     let incidentId;
@@ -128,7 +155,16 @@ router.post('/', protect, [
       reporterId: req.user._id,
       status: 'unverified',
       verified: false,
-      ai
+      ai,
+      // New fields
+      contactInfo,
+      affectedPeople,
+      propertyDamage,
+      urgency,
+      resourcesNeeded,
+      weatherConditions,
+      incidentTime: incidentTime ? new Date(incidentTime) : new Date(),
+      additionalDetails
     });
 
     const populatedIncident = await Incident.findById(incident._id)
@@ -138,6 +174,12 @@ router.post('/', protect, [
     if (io) {
       io.emit('incident:created', populatedIncident);
     }
+
+    await createAuditLog(req, 'create_incident', 'Incident', incident.id, {
+      type,
+      severity,
+      peopleRequired: incident.peopleRequired
+    });
 
     try {
       const volunteers = await User.find({ role: 'volunteer', status: 'active' }).select('email');
@@ -225,6 +267,10 @@ router.put('/:id', protect, async (req, res) => {
       io.emit('incident:updated', updatedIncident);
     }
 
+    await createAuditLog(req, 'update_incident', 'Incident', incident.id, {
+      updatedFields: req.body
+    });
+
     res.json({
       success: true,
       data: updatedIncident
@@ -269,6 +315,11 @@ router.delete('/:id', protect, async (req, res) => {
     if (io) {
       io.emit('incident:deleted', { id: incident.id });
     }
+
+    await createAuditLog(req, 'delete_incident', 'Incident', incident.id, {
+      reporterId: incident.reporterId,
+      deletedBy: req.user._id
+    });
 
     res.json({
       success: true,

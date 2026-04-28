@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 const { protect } = require('../middleware/auth');
+const { createAuditLog } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -47,6 +48,11 @@ router.post('/register', [
 
     // Generate token
     const token = generateToken(user._id);
+
+    await createAuditLog(req, 'register_user', 'User', user._id.toString(), {
+      email: user.email,
+      role: user.role
+    });
 
     res.status(201).json({
       success: true,
@@ -112,6 +118,11 @@ router.post('/login', [
 
     // Generate token
     const token = generateToken(user._id);
+
+    await createAuditLog(req, 'login_user', 'User', user._id.toString(), {
+      email: user.email,
+      role: user.role
+    });
 
     res.json({
       success: true,

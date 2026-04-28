@@ -17,6 +17,10 @@ const Dashboard = () => {
   });
   const [activeFilter, setActiveFilter] = useState('all');
   const [showHeatmap, setShowHeatmap] = useState(false);
+
+  const duplicateIncidentCount = incidents.filter(i => i.ai?.duplicateOf).length;
+  const criticalAIIncidents = incidents.filter(i => i.ai?.priority === 'critical').length;
+  const aiConfidenceAvg = incidents.reduce((acc, incident) => acc + (incident.ai?.confidence || 0), 0) / Math.max(1, incidents.length);
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const clusterGroupRef = useRef(null);
@@ -459,7 +463,29 @@ const Dashboard = () => {
                 )}
               </div>
             </div>
-            
+
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="text-white font-black uppercase tracking-widest text-xs">AI Insights</h4>
+                  <p className="text-slate-400 text-sm">Actionable signals from incident intelligence</p>
+                </div>
+                <span className="text-xs uppercase tracking-widest text-slate-500 bg-slate-800 px-2 py-1 rounded-full">
+                  Confidence {Math.round(aiConfidenceAvg * 100)}%
+                </span>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4">
+                  <p className="text-slate-400 text-sm">Potential duplicate reports</p>
+                  <p className="text-white text-3xl font-black">{duplicateIncidentCount}</p>
+                </div>
+                <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4">
+                  <p className="text-slate-400 text-sm">Critical AI priority</p>
+                  <p className="text-white text-3xl font-black">{criticalAIIncidents}</p>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-indigo-600 rounded-3xl p-6 shadow-2xl shadow-indigo-500/20 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                 <svg className="w-24 h-24 text-white" fill="currentColor" viewBox="0 0 20 20">

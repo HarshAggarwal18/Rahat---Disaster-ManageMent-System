@@ -4,6 +4,7 @@ const Group = require('../models/Group');
 const User = require('../models/User');
 const Incident = require('../models/Incident');
 const { protect, authorize } = require('../middleware/auth');
+const { createAuditLog } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -66,6 +67,11 @@ router.post('/', protect, authorize('admin', 'volunteer'), [
       .populate('members', 'firstName lastName email role')
       .populate('createdBy', 'firstName lastName email role');
 
+    await createAuditLog(req, 'create_group', 'Group', group._id.toString(), {
+      name: group.name,
+      memberCount: memberIds.length
+    });
+
     res.status(201).json({
       success: true,
       data: populated
@@ -109,6 +115,10 @@ router.put('/:groupId/members', protect, authorize('admin', 'volunteer'), async 
     const populated = await Group.findById(group._id)
       .populate('members', 'firstName lastName email role')
       .populate('createdBy', 'firstName lastName email role');
+
+    await createAuditLog(req, 'update_group_members', 'Group', group._id.toString(), {
+      memberCount: group.members.length
+    });
 
     res.json({
       success: true,
@@ -159,6 +169,12 @@ router.post('/:groupId/assign/:incidentId', protect, authorize('admin', 'volunte
     const updated = await Incident.findById(incident._id)
       .populate('assignedGroup', 'name')
       .populate('assignedVolunteers', 'firstName lastName email');
+
+    await createAuditLog(req, 'assign_group', 'Group', group._id.toString(), {
+      incidentId: incident.id,
+      groupName: group.name,
+      assignedVolunteers: group.members.length
+    });
 
     const io = req.app.get('io');
     if (io) {

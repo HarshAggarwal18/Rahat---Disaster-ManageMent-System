@@ -16,19 +16,21 @@ const incidentRoutes = require('./routes/incidents');
 const volunteerRoutes = require('./routes/volunteers');
 const adminRoutes = require('./routes/admin');
 const groupRoutes = require('./routes/groups');
+const auditRoutes = require('./routes/audit');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*'
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000'
   }
 });
 
 app.set('io', io);
 
 // Middleware
-app.use(cors());
+app.disable('x-powered-by');
+app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:3000' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -61,6 +63,7 @@ app.use('/api/incidents', incidentRoutes);
 app.use('/api/volunteers', volunteerRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/audit', auditRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
