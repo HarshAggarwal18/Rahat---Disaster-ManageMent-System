@@ -4,6 +4,7 @@ import { getSession } from '../utils/storage';
 import { incidentsAPI, usersAPI, adminAPI } from '../utils/api';
 import { formatTime, getSeverityColorClass } from '../utils/format';
 import { showNotification } from '../utils/notifications';
+import { socket } from '../utils/socket';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -30,6 +31,22 @@ const Dashboard = () => {
     }
     setUser(session);
     loadData();
+  }, []);
+
+  useEffect(() => {
+    const handleIncidentUpdate = () => {
+      loadData();
+    };
+
+    socket.on('incident:created', handleIncidentUpdate);
+    socket.on('incident:updated', handleIncidentUpdate);
+    socket.on('incident:deleted', handleIncidentUpdate);
+
+    return () => {
+      socket.off('incident:created', handleIncidentUpdate);
+      socket.off('incident:updated', handleIncidentUpdate);
+      socket.off('incident:deleted', handleIncidentUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -338,141 +355,126 @@ const Dashboard = () => {
   if (!user) return null;
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <Navigation currentPage="dashboard" />
+    <div className="min-h-screen bg-slate-950 text-slate-200">
+      <Navigation />
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6 card-hover">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Active Incidents</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.critical}</p>
-                <p className="text-red-600 text-sm mt-1">
-                  <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">+3 since last hour</span>
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-          </div>
+      {/* Hero Header */}
+      <div className="relative overflow-hidden bg-slate-900 py-16 mb-8">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-rose-600/10 rounded-full blur-3xl"></div>
+        
+        <div className="max-w-7xl mx-auto px-4 relative z-10 text-center">
+          <h2 className="text-4xl md:text-6xl font-black text-white mb-4 tracking-tight">
+            <span ref={typedTextRef}></span>
+          </h2>
+          <p className="text-slate-400 text-lg md:text-xl max-w-2xl mx-auto font-medium">
+            Next-generation crisis intelligence and resource orchestration platform.
+          </p>
+        </div>
+      </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6 card-hover">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Active Volunteers</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.volunteers}</p>
-                <p className="text-blue-600 text-sm mt-1">
-                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">85% response rate</span>
-                </p>
+      <main className="max-w-7xl mx-auto px-4 pb-20">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          {[
+            { label: 'Active Incidents', value: stats.critical, color: 'text-rose-500', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', bg: 'bg-rose-500/10' },
+            { label: 'Ready Responders', value: stats.volunteers, color: 'text-indigo-500', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', bg: 'bg-indigo-500/10' },
+            { label: 'Resolved Today', value: stats.resolved, color: 'text-emerald-500', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', bg: 'bg-emerald-500/10' },
+            { label: 'Intelligence Score', value: '98%', color: 'text-amber-500', icon: 'M13 10V3L4 14h7v7l9-11h-7z', bg: 'bg-amber-500/10' },
+          ].map((stat, idx) => (
+            <div key={idx} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl transition-all hover:scale-[1.02] hover:border-slate-700">
+              <div className="flex items-center justify-between mb-4">
+                <div className={`${stat.bg} p-3 rounded-xl`}>
+                  <svg className={`w-6 h-6 ${stat.color}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={stat.icon} />
+                  </svg>
+                </div>
+                <span className={`text-3xl font-black ${stat.color}`}>{stat.value}</span>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                </svg>
-              </div>
+              <h3 className="text-slate-500 font-bold uppercase tracking-wider text-xs">{stat.label}</h3>
             </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6 card-hover">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Resolved Today</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.resolved}</p>
-                <p className="text-green-600 text-sm mt-1">
-                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">+12% efficiency</span>
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.414L11 9.586V6z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm p-6 card-hover">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Avg Response Time</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.avgResponse}<span className="text-lg">m</span></p>
-                <p className="text-green-600 text-sm mt-1">
-                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">-8% improvement</span>
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Live Incident Map</h3>
-                <button
-                  onClick={() => setShowHeatmap(!showHeatmap)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    showHeatmap
-                      ? 'bg-orange-600 text-white hover:bg-orange-700'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {showHeatmap ? '🔥 Heat Map ON' : '🗺️ Show Heat Map'}
-                </button>
+          {/* Map Column */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+              <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-900/50">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-rose-500 rounded-full animate-pulse"></div>
+                  <h3 className="font-black text-white uppercase tracking-tight">Live Situation Map</h3>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => setShowHeatmap(!showHeatmap)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                      showHeatmap 
+                        ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20' 
+                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {showHeatmap ? '🔥 Heatview On' : '📍 Standard View'}
+                  </button>
+                </div>
               </div>
-              <div ref={mapRef} id="incident-map" className="h-96 rounded-lg" style={{ minHeight: '400px' }}></div>
+              <div ref={mapRef} className="h-[500px] z-0 grayscale-[0.2] brightness-90 contrast-125"></div>
             </div>
           </div>
 
+          {/* Activity Column */}
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Filter Incidents</h3>
-              <div className="space-y-2">
-                {['all', 'critical', 'fire', 'medical'].map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => handleFilter(filter)}
-                    className={`w-full text-left px-3 py-2 text-sm rounded transition-colors ${
-                      activeFilter === filter
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    {filter === 'all' ? 'All Incidents' : 
-                     filter === 'critical' ? '🔴 Critical Only' :
-                     filter === 'fire' ? '🔥 Fire Incidents' : '🏥 Medical'}
-                  </button>
-                ))}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
+              <h3 className="font-black text-white uppercase tracking-tight mb-6 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Recent Intelligence
+              </h3>
+              
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                {incidents.length > 0 ? (
+                  incidents.slice(0, 8).map(incident => (
+                    <div key={incident.id} className="group p-4 bg-slate-800/50 border border-slate-700/50 rounded-2xl hover:bg-slate-800 transition-all cursor-pointer">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ${getSeverityColorClass(incident.severity)}`}>
+                          Level {incident.severity}
+                        </span>
+                        <span className="text-slate-500 text-[10px] font-medium">{formatTime(incident.timestamp)}</span>
+                      </div>
+                      <h4 className="text-white font-bold text-sm mb-1 line-clamp-1 group-hover:text-indigo-400">{incident.type.toUpperCase()}</h4>
+                      <p className="text-slate-400 text-xs line-clamp-2 leading-relaxed">{incident.description}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10">
+                    <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                      </svg>
+                    </div>
+                    <p className="text-slate-500 text-sm font-medium">Scanning for signals...</p>
+                  </div>
+                )}
               </div>
             </div>
-
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Live Activity Feed</h3>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {incidents.filter(i => i.verified).slice(0, 8).map(incident => (
-                  <div key={incident.id} className="p-3 bg-gray-50 rounded-lg border-l-4 border-blue-500">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-2 h-2 rounded-full ${getSeverityColorClass(incident.severity)}`}></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">{incident.description}</p>
-                        <p className="text-xs text-gray-500">{incident.type.toUpperCase()} • {incident.id} • {formatTime(incident.timestamp)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            
+            <div className="bg-indigo-600 rounded-3xl p-6 shadow-2xl shadow-indigo-500/20 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                <svg className="w-24 h-24 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                </svg>
               </div>
+              <h4 className="text-white font-black uppercase tracking-widest text-xs mb-2">System Status</h4>
+              <p className="text-indigo-100 text-2xl font-black mb-4">All Protocols Active</p>
+              <button className="w-full py-3 bg-white text-indigo-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 transition-colors">
+                Run Diagnostic
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

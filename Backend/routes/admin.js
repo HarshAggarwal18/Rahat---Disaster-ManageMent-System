@@ -2,6 +2,8 @@ const express = require('express');
 const User = require('../models/User');
 const Incident = require('../models/Incident');
 const { protect, authorize } = require('../middleware/auth');
+const { getVolunteerRecommendations } = require('../utils/incidentDispatch');
+const { sendEmail, incidentAssignedEmail } = require('../utils/email');
 
 const router = express.Router();
 
@@ -74,6 +76,38 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// @route   GET /api/admin/dispatch/:incidentId
+// @desc    Get AI-based volunteer recommendations
+// @access  Private/Admin
+router.get('/dispatch/:incidentId', async (req, res) => {
+  try {
+    const incident = await Incident.findOne({ id: req.params.incidentId });
+
+    if (!incident) {
+      return res.status(404).json({
+        success: false,
+        message: 'Incident not found'
+      });
+    }
+
+    const volunteers = await User.find({ role: 'volunteer', status: 'active' })
+      .select('firstName lastName email availability skills currentLocation');
+
+    const recommendations = getVolunteerRecommendations(incident, volunteers);
+
+    res.json({
+      success: true,
+      data: recommendations
+    });
+  } catch (error) {
+    console.error('Dispatch recommendation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // @route   POST /api/admin/verify-incident/:incidentId
 // @desc    Verify an incident
 // @access  Private/Admin
@@ -100,6 +134,11 @@ router.post('/verify-incident/:incidentId', async (req, res) => {
     const updatedIncident = await Incident.findById(incident._id)
       .populate('reporterId', 'firstName lastName email')
       .populate('verifiedBy', 'firstName lastName email');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident:updated', updatedIncident);
+    }
 
     res.json({
       success: true,
@@ -129,6 +168,11 @@ router.post('/reject-incident/:incidentId', async (req, res) => {
     }
 
     await incident.deleteOne();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident:deleted', { id: incident.id });
+    }
 
     res.json({
       success: true,
@@ -275,6 +319,20 @@ router.post('/assign-incident/:incidentId', async (req, res) => {
       .populate('assignedTo', 'firstName lastName email')
       .populate('verifiedBy', 'firstName lastName email');
 
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident:updated', updatedIncident);
+    }
+
+    try {
+      if (volunteer.email) {
+        const email = incidentAssignedEmail(updatedIncident, volunteer);
+        await sendEmail({ to: volunteer.email, subject: email.subject, html: email.html });
+      }
+    } catch (emailError) {
+      console.warn('Admin assignment email failed:', emailError.message);
+    }
+
     res.json({
       success: true,
       data: updatedIncident
@@ -323,6 +381,14 @@ router.put('/volunteers/:volunteerId/location', async (req, res) => {
     };
 
     await volunteer.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('volunteer:location', {
+        id: volunteer._id,
+        currentLocation: volunteer.currentLocation
+      });
+    }
 
     res.json({
       success: true,

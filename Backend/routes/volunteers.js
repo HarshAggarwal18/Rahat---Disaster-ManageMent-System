@@ -2,6 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const Incident = require('../models/Incident');
 const { protect, authorize } = require('../middleware/auth');
+const { sendEmail, incidentAssignedEmail } = require('../utils/email');
 
 const router = express.Router();
 
@@ -122,6 +123,20 @@ router.post('/assign-task/:incidentId', protect, authorize('volunteer'), async (
       .populate('reporterId', 'firstName lastName email')
       .populate('assignedTo', 'firstName lastName email');
 
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident:updated', updatedIncident);
+    }
+
+    try {
+      if (req.user.email) {
+        const email = incidentAssignedEmail(updatedIncident, req.user);
+        await sendEmail({ to: req.user.email, subject: email.subject, html: email.html });
+      }
+    } catch (emailError) {
+      console.warn('Assignment email failed:', emailError.message);
+    }
+
     res.json({
       success: true,
       data: updatedIncident
@@ -165,6 +180,11 @@ router.post('/complete-task/:incidentId', protect, authorize('volunteer'), async
       .populate('reporterId', 'firstName lastName email')
       .populate('assignedTo', 'firstName lastName email');
 
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident:updated', updatedIncident);
+    }
+
     res.json({
       success: true,
       data: updatedIncident
@@ -194,6 +214,14 @@ router.put('/update-location', protect, authorize('volunteer'), async (req, res)
 
     req.user.currentLocation = { lat, lng };
     await req.user.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('volunteer:location', {
+        id: req.user._id,
+        currentLocation: req.user.currentLocation
+      });
+    }
 
     res.json({
       success: true,
@@ -240,6 +268,11 @@ router.post('/unassign-task/:incidentId', protect, authorize('volunteer'), async
     );
 
     await incident.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident:updated', incident);
+    }
 
     // Remove from volunteer's assigned tasks
     req.user.assignedTasks = req.user.assignedTasks.filter(

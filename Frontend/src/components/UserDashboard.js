@@ -4,6 +4,7 @@ import { getSession } from '../utils/storage';
 import { incidentsAPI } from '../utils/api';
 import { formatTime } from '../utils/format';
 import { showNotification } from '../utils/notifications';
+import { socket } from '../utils/socket';
 
 const UserDashboard = () => {
   const [user, setUser] = useState(null);
@@ -12,7 +13,8 @@ const UserDashboard = () => {
     type: '',
     severity: '',
     description: '',
-    location: null
+    location: null,
+    peopleRequired: 1
   });
   const [selectedLocation, setSelectedLocation] = useState(null);
   const mapRef = useRef(null);
@@ -62,6 +64,22 @@ const UserDashboard = () => {
     if (user) {
       loadIncidents();
     }
+  }, [user]);
+
+  useEffect(() => {
+    const handleIncidentUpdate = () => {
+      loadIncidents();
+    };
+
+    socket.on('incident:created', handleIncidentUpdate);
+    socket.on('incident:updated', handleIncidentUpdate);
+    socket.on('incident:deleted', handleIncidentUpdate);
+
+    return () => {
+      socket.off('incident:created', handleIncidentUpdate);
+      socket.off('incident:updated', handleIncidentUpdate);
+      socket.off('incident:deleted', handleIncidentUpdate);
+    };
   }, [user]);
 
   // Update map when incidents change
@@ -375,7 +393,8 @@ const UserDashboard = () => {
         location: {
           lat: parseFloat(formData.location.lat),
           lng: parseFloat(formData.location.lng)
-        }
+        },
+        peopleRequired: parseInt(formData.peopleRequired || 1)
       };
 
           console.log('Creating incident with data:', incidentData);
@@ -388,7 +407,7 @@ const UserDashboard = () => {
         showNotification('Incident reported successfully!', 'success');
         
         // Reset form first
-        setFormData({ type: '', severity: '', description: '', location: null });
+        setFormData({ type: '', severity: '', description: '', location: null, peopleRequired: 1 });
         setSelectedLocation(null);
         
         // Clear location markers
@@ -419,59 +438,60 @@ const UserDashboard = () => {
   });
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <Navigation currentPage="user" />
+    <div className="bg-slate-950 text-slate-200 min-h-screen">
+      <Navigation />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">User Dashboard</h1>
-          <p className="text-gray-600 mt-2">Report incidents and track your submissions</p>
+          <h1 className="text-3xl font-bold text-white">User Dashboard</h1>
+          <p className="text-slate-400 mt-2">Report incidents and track your submissions</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 text-sm font-medium">Total Reports</p>
-            <p className="text-3xl font-bold text-gray-900">{userReports.length}</p>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <p className="text-slate-400 text-sm font-medium">Total Reports</p>
+            <p className="text-3xl font-bold text-white">{userReports.length}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 text-sm font-medium">Verified Reports</p>
-            <p className="text-3xl font-bold text-gray-900">{userReports.filter(r => r.verified).length}</p>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <p className="text-slate-400 text-sm font-medium">Verified Reports</p>
+            <p className="text-3xl font-bold text-white">{userReports.filter(r => r.verified).length}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 text-sm font-medium">Pending Verification</p>
-            <p className="text-3xl font-bold text-gray-900">{userReports.filter(r => !r.verified).length}</p>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <p className="text-slate-400 text-sm font-medium">Pending Verification</p>
+            <p className="text-3xl font-bold text-white">{userReports.filter(r => !r.verified).length}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Report New Incident</h3>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Report New Incident</h3>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Incident Type</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Incident Type</label>
                     <select
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                      className="w-full p-3 border border-gray-300 rounded-lg"
+                      className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
                       required
                     >
                       <option value="">Select Type</option>
                       <option value="fire">🔥 Fire</option>
                       <option value="medical">🏥 Medical Emergency</option>
                       <option value="flood">🌊 Flooding</option>
+                      <option value="storm">⛈️ Storm</option>
                       <option value="accident">🚗 Traffic Accident</option>
                       <option value="earthquake">🌍 Earthquake</option>
                       <option value="other">❓ Other</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Severity Level</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Severity Level</label>
                     <select
                       value={formData.severity}
                       onChange={(e) => setFormData({ ...formData, severity: e.target.value })}
-                      className="w-full p-3 border border-gray-300 rounded-lg"
+                      className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
                       required
                     >
                       <option value="">Select Severity</option>
@@ -484,23 +504,35 @@ const UserDashboard = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
                   <textarea
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows="4"
-                    className="w-full p-3 border border-gray-300 rounded-lg"
+                    className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
                     placeholder="Describe the incident in detail..."
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">People Required</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={formData.peopleRequired}
+                    onChange={(e) => setFormData({ ...formData, peopleRequired: e.target.value })}
+                    className="w-full p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Location</label>
                   <div className="flex space-x-2">
                     <input
                       type="text"
                       value={selectedLocation ? `${selectedLocation.lat.toFixed(6)}, ${selectedLocation.lng.toFixed(6)}` : ''}
-                      className="flex-1 p-3 border border-gray-300 rounded-lg"
+                      className="flex-1 p-3 border border-slate-700 bg-slate-950 text-slate-200 rounded-lg"
                       placeholder="Click on map or use GPS"
                       readOnly
                     />
@@ -522,22 +554,22 @@ const UserDashboard = () => {
               </form>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Incident Locations</h3>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Incident Locations</h3>
               <div ref={mapRef} id="user-map" className="h-96 rounded-lg" style={{ minHeight: '400px' }}></div>
-              <p className="text-sm text-gray-600 mt-2">📍 Click on the map to set incident location</p>
+              <p className="text-sm text-slate-400 mt-2">📍 Click on the map to set incident location</p>
             </div>
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">My Reports</h3>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">My Reports</h3>
+              <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
                 {userReports.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">No reports yet</p>
+                  <p className="text-center text-slate-500 py-8">No reports yet</p>
                 ) : (
                   userReports.map(report => (
-                    <div key={report.id} className="p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500">
+                    <div key={report.id} className="p-4 bg-slate-950/60 rounded-lg border-l-4 border-indigo-500">
                       <div className="flex items-start justify-between mb-2">
                         <span className="text-xs font-medium px-2 py-1 rounded bg-blue-500 text-white">
                           {report.type.toUpperCase()}
@@ -548,8 +580,14 @@ const UserDashboard = () => {
                           {report.verified ? 'VERIFIED' : 'UNVERIFIED'}
                         </span>
                       </div>
-                      <h4 className="font-medium text-gray-900 mb-2">{report.description}</h4>
-                      <p className="text-xs text-gray-600">{formatTime(report.timestamp)}</p>
+                      <h4 className="font-medium text-white mb-2">{report.description}</h4>
+                      {report.ai?.summary && (
+                        <p className="text-xs text-slate-400 mb-1">AI Summary: {report.ai.summary}</p>
+                      )}
+                      {report.ai?.duplicateOf && (
+                        <p className="text-xs text-red-600 mb-1">Possible duplicate of {report.ai.duplicateOf} (score {report.ai.duplicateScore})</p>
+                      )}
+                      <p className="text-xs text-slate-500">{formatTime(report.timestamp)}</p>
                     </div>
                   ))
                 )}

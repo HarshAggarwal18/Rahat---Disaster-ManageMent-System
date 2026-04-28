@@ -1,15 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Navigation from './Navigation';
 import { getSession } from '../utils/storage';
-import { incidentsAPI, usersAPI, adminAPI } from '../utils/api';
+import { incidentsAPI, usersAPI, adminAPI, groupsAPI } from '../utils/api';
 import { formatTime, getSeverityText, getSeverityColor } from '../utils/format';
 import { showNotification } from '../utils/notifications';
+import { socket } from '../utils/socket';
 
 const Admin = () => {
   const [user, setUser] = useState(null);
   const [incidents, setIncidents] = useState([]);
   const [users, setUsers] = useState([]);
   const [assigningIncident, setAssigningIncident] = useState(null);
+  const [dispatchRecommendations, setDispatchRecommendations] = useState([]);
+  const [dispatchLoading, setDispatchLoading] = useState(false);
+  const [groups, setGroups] = useState([]);
+  const [groupForm, setGroupForm] = useState({ name: '', notes: '', members: [] });
+  const [groupAssign, setGroupAssign] = useState({ groupId: '', incidentId: '' });
   const [activeSection, setActiveSection] = useState('dashboard');
   const [verificationFilter, setVerificationFilter] = useState('all');
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -78,6 +84,46 @@ const Admin = () => {
     }
   }, [activeSection, incidents]);
 
+  useEffect(() => {
+    const handleIncidentUpdate = () => {
+      loadData();
+    };
+
+    socket.on('incident:created', handleIncidentUpdate);
+    socket.on('incident:updated', handleIncidentUpdate);
+    socket.on('incident:deleted', handleIncidentUpdate);
+    socket.on('volunteer:location', handleIncidentUpdate);
+
+    return () => {
+      socket.off('incident:created', handleIncidentUpdate);
+      socket.off('incident:updated', handleIncidentUpdate);
+      socket.off('incident:deleted', handleIncidentUpdate);
+      socket.off('volunteer:location', handleIncidentUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadRecommendations = async () => {
+      if (!assigningIncident) {
+        setDispatchRecommendations([]);
+        return;
+      }
+      setDispatchLoading(true);
+      try {
+        const response = await adminAPI.getDispatchRecommendations(assigningIncident);
+        if (response.success) {
+          setDispatchRecommendations(response.data.slice(0, 5));
+        }
+      } catch (error) {
+        console.error('Dispatch recommendation error:', error);
+      } finally {
+        setDispatchLoading(false);
+      }
+    };
+
+    loadRecommendations();
+  }, [assigningIncident]);
+
   const loadData = async () => {
     try {
       console.log('Admin: Loading data...');
@@ -109,9 +155,58 @@ const Admin = () => {
         console.error('Admin: Error loading users:', userError);
         // Don't show error for users, just log it
       }
+
+      // Load groups
+      try {
+        const groupsResponse = await groupsAPI.getAll();
+        if (groupsResponse.success) {
+          setGroups(groupsResponse.data || []);
+        }
+      } catch (groupError) {
+        console.error('Admin: Error loading groups:', groupError);
+      }
     } catch (error) {
       console.error('Admin: Error loading data:', error);
       showNotification(error.message || 'Failed to load data', 'error');
+    }
+  };
+
+  const createGroup = async () => {
+    if (!groupForm.name.trim()) {
+      showNotification('Group name is required', 'error');
+      return;
+    }
+
+    try {
+      const response = await groupsAPI.create({
+        name: groupForm.name.trim(),
+        notes: groupForm.notes.trim(),
+        members: groupForm.members
+      });
+      if (response.success) {
+        showNotification('Group created successfully', 'success');
+        setGroupForm({ name: '', notes: '', members: [] });
+        await loadData();
+      }
+    } catch (error) {
+      showNotification(error.message || 'Failed to create group', 'error');
+    }
+  };
+
+  const assignGroupToIncident = async () => {
+    if (!groupAssign.groupId || !groupAssign.incidentId) {
+      showNotification('Select both group and incident', 'error');
+      return;
+    }
+    try {
+      const response = await groupsAPI.assignGroupToIncident(groupAssign.groupId, groupAssign.incidentId);
+      if (response.success) {
+        showNotification('Group assigned to incident', 'success');
+        setGroupAssign({ groupId: '', incidentId: '' });
+        await loadData();
+      }
+    } catch (error) {
+      showNotification(error.message || 'Failed to assign group', 'error');
     }
   };
 
@@ -346,10 +441,13 @@ const Admin = () => {
         const HeatLayer = window.L.heatLayer || window.L.HeatLayer || (window.HeatLayer && window.HeatLayer.heatLayer);
         
         if (HeatLayer) {
-          // Filter only available and verified incidents for heatmap
-          const availableIncidents = allIncidents.filter(i => 
+          // Filter available incidents; fall back to all verified if none available
+          let availableIncidents = allIncidents.filter(i => 
             i.verified && i.status === 'available' && !i.assignedTo
           );
+          if (availableIncidents.length === 0) {
+            availableIncidents = allIncidents.filter(i => i.verified);
+          }
           
           console.log('Admin: Creating heatmap with', availableIncidents.length, 'available incidents');
           
@@ -482,8 +580,8 @@ const Admin = () => {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation currentPage="admin" />
+    <div className="min-h-screen bg-slate-950 text-slate-200">
+      <Navigation />
       <div className="flex">
         <div className="w-64 bg-gradient-to-b from-gray-800 to-gray-900 min-h-screen sticky top-0">
           <div className="p-6">
@@ -495,6 +593,7 @@ const Admin = () => {
               { id: 'users', label: 'Users', icon: '👥' },
               { id: 'volunteers', label: 'Volunteers', icon: '🚑' },
               { id: 'analytics', label: 'Analytics', icon: '📈' },
+              { id: 'groups', label: 'Groups', icon: '🧩' },
               { id: 'settings', label: 'Settings', icon: '⚙️' }
             ].map(section => (
               <button
@@ -514,41 +613,41 @@ const Admin = () => {
         </div>
 
         <div className="flex-1">
-        <div className="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-600 text-sm">System overview and management</p>
+        <div className="bg-slate-900/80 shadow-xl border-b border-slate-800 px-6 py-4">
+          <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+          <p className="text-slate-400 text-sm">System overview and management</p>
         </div>
 
         <div className="p-6">
           {activeSection === 'dashboard' && (
             <div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                  <p className="text-gray-600 text-sm font-medium">Total Incidents</p>
-                  <p className="text-3xl font-bold text-gray-900">{incidents.length}</p>
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+                  <p className="text-slate-400 text-sm font-medium">Total Incidents</p>
+                  <p className="text-3xl font-bold text-white">{incidents.length}</p>
                 </div>
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                  <p className="text-gray-600 text-sm font-medium">Verified Incidents</p>
-                  <p className="text-3xl font-bold text-gray-900">{incidents.filter(i => i.verified).length}</p>
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+                  <p className="text-slate-400 text-sm font-medium">Verified Incidents</p>
+                  <p className="text-3xl font-bold text-white">{incidents.filter(i => i.verified).length}</p>
                 </div>
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                  <p className="text-gray-600 text-sm font-medium">Active Volunteers</p>
-                  <p className="text-3xl font-bold text-gray-900">{users.filter(u => u.role === 'volunteer').length}</p>
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+                  <p className="text-slate-400 text-sm font-medium">Active Volunteers</p>
+                  <p className="text-3xl font-bold text-white">{users.filter(u => u.role === 'volunteer').length}</p>
                 </div>
-                <div className="bg-white rounded-lg shadow-sm p-6">
-                  <p className="text-gray-600 text-sm font-medium">System Health</p>
-                  <p className="text-3xl font-bold text-gray-900">98%</p>
+                <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+                  <p className="text-slate-400 text-sm font-medium">System Health</p>
+                  <p className="text-3xl font-bold text-white">98%</p>
                 </div>
               </div>
-              <div className="bg-white rounded-lg shadow-sm p-6">
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Live Incident Map</h3>
+                  <h3 className="text-lg font-semibold text-white">Live Incident Map</h3>
                   <button
                     onClick={() => setShowHeatmap(!showHeatmap)}
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                       showHeatmap
                         ? 'bg-orange-600 text-white hover:bg-orange-700'
-                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                     }`}
                   >
                     {showHeatmap ? '🔥 Heat Map ON' : '🗺️ Show Heat Map'}
@@ -560,13 +659,13 @@ const Admin = () => {
           )}
 
           {activeSection === 'verification' && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Incident Verification</h3>
+                <h3 className="text-lg font-semibold text-white">Incident Verification</h3>
                 <select
                   value={verificationFilter}
                   onChange={(e) => setVerificationFilter(e.target.value)}
-                  className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                  className="text-sm border border-slate-700 bg-slate-950 text-slate-200 rounded-md px-2 py-1"
                 >
                   <option value="all">All Incidents</option>
                   <option value="unverified">Unverified Only</option>
@@ -578,13 +677,19 @@ const Admin = () => {
                   <div
                     key={incident.id}
                     className={`p-4 rounded-lg shadow-sm border-2 ${
-                      incident.verified ? 'border-green-500 bg-green-50' : 'border-yellow-500 bg-yellow-50'
+                      incident.verified ? 'border-emerald-500 bg-slate-950/60' : 'border-amber-500 bg-slate-950/60'
                     }`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <h4 className="font-semibold text-gray-900">{incident.description}</h4>
-                        <p className="text-sm text-gray-600">{incident.id} • {incident.type.toUpperCase()}</p>
+                        <h4 className="font-semibold text-white">{incident.description}</h4>
+                        <p className="text-sm text-slate-400">{incident.id} • {incident.type.toUpperCase()}</p>
+                        {incident.ai?.summary && (
+                          <p className="text-xs text-slate-400 mt-1">AI Summary: {incident.ai.summary}</p>
+                        )}
+                        {incident.ai?.duplicateOf && (
+                          <p className="text-xs text-red-600 mt-1">Possible duplicate of {incident.ai.duplicateOf} (score {incident.ai.duplicateScore})</p>
+                        )}
                       </div>
                       <span className={`px-2 py-1 rounded text-xs ${
                         incident.verified ? 'bg-green-500 text-white' : 'bg-yellow-500 text-white'
@@ -618,10 +723,33 @@ const Admin = () => {
                         </button>
                       )}
                       {assigningIncident === incident.id && (
-                        <div className="w-full mt-2 p-3 bg-blue-50 rounded border border-blue-200">
-                          <p className="text-sm font-medium text-gray-700 mb-2">Select Volunteer:</p>
+                        <div className="w-full mt-2 p-3 bg-slate-950/60 rounded border border-slate-700">
+                          <p className="text-sm font-medium text-slate-200 mb-2">AI Recommended Volunteers:</p>
+                          {dispatchLoading ? (
+                            <p className="text-xs text-slate-500">Loading recommendations...</p>
+                          ) : dispatchRecommendations.length === 0 ? (
+                            <p className="text-xs text-slate-500">No recommendations available yet.</p>
+                          ) : (
+                            <div className="space-y-2 mb-3">
+                              {dispatchRecommendations.map((rec) => (
+                                <div key={rec.id} className="flex items-center justify-between text-xs bg-slate-900/80 p-2 rounded border border-slate-700">
+                                  <div>
+                                    <p className="font-semibold text-slate-200">{rec.name}</p>
+                                    <p className="text-slate-500">Score {rec.score} • {rec.distanceKm != null ? `${rec.distanceKm} km` : 'No GPS'} • {rec.typeMatch ? 'Skill match' : 'General'}</p>
+                                  </div>
+                                  <button
+                                    onClick={() => assignIncidentToVolunteer(incident.id, rec.id)}
+                                    className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+                                  >
+                                    Assign
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <p className="text-sm font-medium text-slate-200 mb-2">Select Volunteer:</p>
                           <select
-                            className="w-full p-2 border border-gray-300 rounded mb-2"
+                            className="w-full p-2 border border-slate-700 bg-slate-900 text-slate-200 rounded mb-2"
                             onChange={(e) => {
                               if (e.target.value) {
                                 assignIncidentToVolunteer(incident.id, e.target.value);
@@ -646,6 +774,108 @@ const Admin = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'groups' && (
+            <div className="space-y-6">
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Create Volunteer Group</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    value={groupForm.name}
+                    onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
+                    placeholder="Group name"
+                    className="p-3 rounded-lg bg-slate-950 border border-slate-700 text-slate-200"
+                  />
+                  <input
+                    type="text"
+                    value={groupForm.notes}
+                    onChange={(e) => setGroupForm({ ...groupForm, notes: e.target.value })}
+                    placeholder="Notes (optional)"
+                    className="p-3 rounded-lg bg-slate-950 border border-slate-700 text-slate-200"
+                  />
+                </div>
+                <div className="mt-4">
+                  <label className="text-sm text-slate-300">Select Members</label>
+                  <select
+                    multiple
+                    value={groupForm.members}
+                    onChange={(e) => {
+                      const selected = Array.from(e.target.selectedOptions).map(option => option.value);
+                      setGroupForm({ ...groupForm, members: selected });
+                    }}
+                    className="w-full mt-2 p-3 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 h-40"
+                  >
+                    {users.filter(u => u.role === 'volunteer').map(volunteer => (
+                      <option key={volunteer._id || volunteer.id} value={volunteer._id || volunteer.id}>
+                        {volunteer.firstName} {volunteer.lastName} ({volunteer.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={createGroup}
+                  className="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-lg"
+                >
+                  Create Group
+                </button>
+              </div>
+
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Assign Group to Incident</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <select
+                    value={groupAssign.groupId}
+                    onChange={(e) => setGroupAssign({ ...groupAssign, groupId: e.target.value })}
+                    className="p-3 rounded-lg bg-slate-950 border border-slate-700 text-slate-200"
+                  >
+                    <option value="">Select Group</option>
+                    {groups.map(group => (
+                      <option key={group._id} value={group._id}>{group.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={groupAssign.incidentId}
+                    onChange={(e) => setGroupAssign({ ...groupAssign, incidentId: e.target.value })}
+                    className="p-3 rounded-lg bg-slate-950 border border-slate-700 text-slate-200"
+                  >
+                    <option value="">Select Incident</option>
+                    {incidents.map(incident => (
+                      <option key={incident.id} value={incident.id}>{incident.id} • {incident.type}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={assignGroupToIncident}
+                  className="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-lg"
+                >
+                  Assign Group
+                </button>
+              </div>
+
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Existing Groups</h3>
+                <div className="space-y-3">
+                  {groups.length === 0 ? (
+                    <p className="text-slate-500">No groups created yet.</p>
+                  ) : (
+                    groups.map(group => (
+                      <div key={group._id} className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-white font-semibold">{group.name}</p>
+                            <p className="text-xs text-slate-400">Members: {group.members?.length || 0}</p>
+                          </div>
+                          <span className="text-xs text-slate-500">{group.roleScope.toUpperCase()}</span>
+                        </div>
+                        {group.notes && <p className="text-xs text-slate-400 mt-2">{group.notes}</p>}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           )}

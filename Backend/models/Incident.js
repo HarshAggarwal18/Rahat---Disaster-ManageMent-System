@@ -9,7 +9,7 @@ const incidentSchema = new mongoose.Schema({
   type: {
     type: String,
     required: [true, 'Incident type is required'],
-    enum: ['fire', 'medical', 'flood', 'earthquake', 'storm', 'other']
+    enum: ['fire', 'medical', 'flood', 'earthquake', 'storm', 'accident', 'other']
   },
   severity: {
     type: Number,
@@ -36,6 +36,11 @@ const incidentSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Description is required'],
     trim: true
+  },
+  peopleRequired: {
+    type: Number,
+    min: 1,
+    default: 1
   },
   timestamp: {
     type: Date,
@@ -72,6 +77,13 @@ const incidentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  assignedGroup: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Group'
+  },
+  groupAssignedAt: {
+    type: Date
+  },
   resources: [{
     type: String
   }],
@@ -88,7 +100,17 @@ const incidentSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
-  }]
+  }],
+  ai: {
+    suggestedType: String,
+    suggestedSeverity: Number,
+    priority: String,
+    keywords: [String],
+    summary: String,
+    duplicateOf: String,
+    duplicateScore: Number,
+    confidence: Number
+  }
 }, {
   timestamps: true
 });

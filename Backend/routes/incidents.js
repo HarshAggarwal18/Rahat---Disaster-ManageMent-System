@@ -1,8 +1,11 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Incident = require('../models/Incident');
+const User = require('../models/User');
+const { sendEmail, incidentReportedEmail } = require('../utils/email');
 const { protect } = require('../middleware/auth');
 const { generateIncidentId } = require('../utils/generateId');
+const { buildIncidentAI } = require('../utils/incidentAI');
 
 const router = express.Router();
 
@@ -76,11 +79,12 @@ router.get('/:id', protect, async (req, res) => {
 // @desc    Create new incident
 // @access  Private
 router.post('/', protect, [
-  body('type').isIn(['fire', 'medical', 'flood', 'earthquake', 'storm', 'other']).withMessage('Invalid incident type'),
+  body('type').isIn(['fire', 'medical', 'flood', 'earthquake', 'storm', 'accident', 'other']).withMessage('Invalid incident type'),
   body('severity').isInt({ min: 1, max: 5 }).withMessage('Severity must be between 1 and 5'),
   body('description').trim().notEmpty().withMessage('Description is required'),
   body('location.lat').isFloat().withMessage('Valid latitude is required'),
-  body('location.lng').isFloat().withMessage('Valid longitude is required')
+  body('location.lng').isFloat().withMessage('Valid longitude is required'),
+  body('peopleRequired').optional().isInt({ min: 1, max: 100 }).withMessage('People required must be between 1 and 100')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -93,7 +97,7 @@ router.post('/', protect, [
       });
     }
 
-    const { type, severity, description, location } = req.body;
+    const { type, severity, description, location, peopleRequired } = req.body;
 
     // Generate unique incident ID
     let incidentId;
@@ -107,20 +111,44 @@ router.post('/', protect, [
     // Get reporter info
     const reporter = `${req.user.firstName} ${req.user.lastName}`;
 
+    const recentIncidents = await Incident.find({
+      timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+    }).select('id type severity description location timestamp');
+
+    const ai = buildIncidentAI({ type, severity, description, location }, recentIncidents);
+
     const incident = await Incident.create({
       id: incidentId,
       type,
       severity,
       description,
       location,
+      peopleRequired: peopleRequired || 1,
       reporter,
       reporterId: req.user._id,
       status: 'unverified',
-      verified: false
+      verified: false,
+      ai
     });
 
     const populatedIncident = await Incident.findById(incident._id)
       .populate('reporterId', 'firstName lastName email');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident:created', populatedIncident);
+    }
+
+    try {
+      const volunteers = await User.find({ role: 'volunteer', status: 'active' }).select('email');
+      const recipientEmails = volunteers.map(v => v.email).filter(Boolean);
+      if (recipientEmails.length > 0) {
+        const email = incidentReportedEmail(populatedIncident);
+        await sendEmail({ to: recipientEmails, subject: email.subject, html: email.html });
+      }
+    } catch (emailError) {
+      console.warn('Incident email notification failed:', emailError.message);
+    }
 
     res.status(201).json({
       success: true,
@@ -192,6 +220,11 @@ router.put('/:id', protect, async (req, res) => {
       .populate('assignedTo', 'firstName lastName email')
       .populate('verifiedBy', 'firstName lastName email');
 
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident:updated', updatedIncident);
+    }
+
     res.json({
       success: true,
       data: updatedIncident
@@ -231,6 +264,11 @@ router.delete('/:id', protect, async (req, res) => {
     }
 
     await incident.deleteOne();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident:deleted', { id: incident.id });
+    }
 
     res.json({
       success: true,

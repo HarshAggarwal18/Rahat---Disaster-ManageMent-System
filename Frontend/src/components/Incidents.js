@@ -4,6 +4,7 @@ import { getSession } from '../utils/storage';
 import { incidentsAPI } from '../utils/api';
 import { formatTime, getSeverityText, getSeverityColor } from '../utils/format';
 import { showNotification } from '../utils/notifications';
+import { socket } from '../utils/socket';
 
 const Incidents = () => {
   const [user, setUser] = useState(null);
@@ -50,6 +51,22 @@ const Incidents = () => {
   }, []);
 
   useEffect(() => {
+    const handleIncidentUpdate = () => {
+      loadIncidents();
+    };
+
+    socket.on('incident:created', handleIncidentUpdate);
+    socket.on('incident:updated', handleIncidentUpdate);
+    socket.on('incident:deleted', handleIncidentUpdate);
+
+    return () => {
+      socket.off('incident:created', handleIncidentUpdate);
+      socket.off('incident:updated', handleIncidentUpdate);
+      socket.off('incident:deleted', handleIncidentUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
     if (mapInstanceRef.current && incidents.length >= 0) {
       updateMapMarkers();
     }
@@ -78,8 +95,10 @@ const Incidents = () => {
   const getFilteredIncidents = () => {
     let filtered = [...incidents];
     
-    if (activeFilter === 'new') {
-      filtered = filtered.filter(i => i.status === 'new');
+    if (activeFilter === 'unverified') {
+      filtered = filtered.filter(i => i.status === 'unverified');
+    } else if (activeFilter === 'available') {
+      filtered = filtered.filter(i => i.status === 'available');
     } else if (activeFilter === 'assigned') {
       filtered = filtered.filter(i => i.status === 'assigned');
     } else if (activeFilter === 'completed') {
@@ -283,8 +302,8 @@ const Incidents = () => {
   };
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <Navigation currentPage="incidents" />
+    <div className="bg-slate-950 text-slate-200 min-h-screen">
+      <Navigation />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
@@ -297,44 +316,46 @@ const Incidents = () => {
             <p className="text-gray-600 text-sm font-medium">Total Incidents</p>
             <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 text-sm font-medium">Active Incidents</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.active}</p>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <p className="text-slate-400 text-sm font-medium">Active Incidents</p>
+            <p className="text-3xl font-bold text-white">{stats.active}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 text-sm font-medium">Resolved Today</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.resolved}</p>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <p className="text-slate-400 text-sm font-medium">Resolved Today</p>
+            <p className="text-3xl font-bold text-white">{stats.resolved}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 text-sm font-medium">Avg Response Time</p>
-            <p className="text-3xl font-bold text-gray-900">{stats.avgResponse}<span className="text-lg">m</span></p>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <p className="text-slate-400 text-sm font-medium">Avg Response Time</p>
+            <p className="text-3xl font-bold text-white">{stats.avgResponse}<span className="text-lg">m</span></p>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6 mb-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">Filter by:</span>
-              {['all', 'new', 'assigned', 'completed', 'critical'].map(filter => (
+              <span className="text-sm font-medium text-slate-300">Filter by:</span>
+              {['all', 'unverified', 'available', 'assigned', 'completed', 'critical'].map(filter => (
                 <button
                   key={filter}
                   onClick={() => setActiveFilter(filter)}
                   className={`px-3 py-1 text-sm rounded transition-colors ${
                     activeFilter === filter
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
-                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                  {filter === 'unverified' ? 'Unverified' :
+                   filter === 'available' ? 'Available' :
+                   filter.charAt(0).toUpperCase() + filter.slice(1)}
                 </button>
               ))}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Sort by:</span>
+              <span className="text-sm text-slate-400">Sort by:</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                className="text-sm border border-slate-700 bg-slate-900 text-slate-200 rounded-md px-2 py-1"
               >
                 <option value="timestamp">Time</option>
                 <option value="severity">Severity</option>
@@ -347,11 +368,11 @@ const Incidents = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6">Recent Incidents</h3>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-6">Recent Incidents</h3>
               <div className="space-y-4">
                 {filteredIncidents.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">No incidents found</p>
+                  <p className="text-center text-slate-500 py-8">No incidents found</p>
                 ) : (
                   filteredIncidents.map(incident => (
                     <div
@@ -359,7 +380,7 @@ const Incidents = () => {
                       className={`p-6 rounded-lg shadow-sm border-l-4 ${
                         incident.severity >= 4 ? 'border-red-500' :
                         incident.severity >= 3 ? 'border-orange-500' : 'border-green-500'
-                      } bg-white`}
+                      } bg-slate-950/60 border border-slate-800`}
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center space-x-3">
@@ -371,17 +392,17 @@ const Incidents = () => {
                           }`}>
                             {incident.type.toUpperCase()}
                           </span>
-                          <span className="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700">
+                          <span className="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300">
                             {incident.status.toUpperCase()}
                           </span>
                         </div>
                         <div className="text-right">
-                          <span className="text-xs text-gray-500">{incident.id}</span>
-                          <div className="text-xs text-gray-400 mt-1">{formatTime(incident.timestamp)}</div>
+                          <span className="text-xs text-slate-400">{incident.id}</span>
+                          <div className="text-xs text-slate-500 mt-1">{formatTime(incident.timestamp)}</div>
                         </div>
                       </div>
-                      <h4 className="font-semibold text-gray-900 mb-2">{incident.description}</h4>
-                      <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
+                      <h4 className="font-semibold text-white mb-2">{incident.description}</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm text-slate-400 mb-4">
                         <div>
                           <span className="font-medium">Severity:</span> {getSeverityText(incident.severity)}
                         </div>
@@ -389,7 +410,13 @@ const Incidents = () => {
                           <span className="font-medium">Reporter:</span> {incident.reporter}
                         </div>
                       </div>
-                      {incident.status === 'new' && (
+                      {incident.ai?.summary && (
+                        <p className="text-xs text-slate-400 mb-3">AI Summary: {incident.ai.summary}</p>
+                      )}
+                      {incident.ai?.duplicateOf && (
+                        <p className="text-xs text-red-600 mb-3">Possible duplicate of {incident.ai.duplicateOf} (score {incident.ai.duplicateScore})</p>
+                      )}
+                      {incident.status === 'available' && (
                         <div className="flex space-x-2">
                           <button
                             onClick={() => assignIncident(incident.id)}
@@ -423,12 +450,12 @@ const Incidents = () => {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Incident Map</h3>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Incident Map</h3>
               <div ref={mapRef} id="incident-map" className="h-96 rounded-lg" style={{ minHeight: '400px' }}></div>
             </div>
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
               <div className="space-y-3">
                 <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 text-sm">
                   👥 Assign Volunteer

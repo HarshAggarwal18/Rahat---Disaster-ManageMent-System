@@ -228,6 +228,36 @@ export const adminAPI = {
       body: JSON.stringify(location),
     });
   },
+
+  getDispatchRecommendations: async (incidentId) => {
+    return apiRequest(`/admin/dispatch/${incidentId}`);
+  },
+};
+
+export const groupsAPI = {
+  getAll: async () => {
+    return apiRequest('/groups');
+  },
+
+  create: async (data) => {
+    return apiRequest('/groups', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateMembers: async (groupId, members) => {
+    return apiRequest(`/groups/${groupId}/members`, {
+      method: 'PUT',
+      body: JSON.stringify({ members }),
+    });
+  },
+
+  assignGroupToIncident: async (groupId, incidentId) => {
+    return apiRequest(`/groups/${groupId}/assign/${incidentId}`, {
+      method: 'POST',
+    });
+  }
 };
 
 export default {
@@ -236,5 +266,6 @@ export default {
   incidents: incidentsAPI,
   volunteers: volunteersAPI,
   admin: adminAPI,
+  groups: groupsAPI,
 };
 

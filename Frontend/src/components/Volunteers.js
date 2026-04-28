@@ -5,6 +5,7 @@ import { incidentsAPI, volunteersAPI } from '../utils/api';
 import { formatTime, getSeverityText } from '../utils/format';
 import { showNotification } from '../utils/notifications';
 import { getRoute, drawRouteOnMap } from '../utils/routing';
+import { socket } from '../utils/socket';
 
 const Volunteers = () => {
   const [user, setUser] = useState(null);
@@ -30,6 +31,22 @@ const Volunteers = () => {
     setUser(session);
     loadIncidents();
     getCurrentLocation();
+  }, []);
+
+  useEffect(() => {
+    const handleIncidentUpdate = () => {
+      loadIncidents();
+    };
+
+    socket.on('incident:created', handleIncidentUpdate);
+    socket.on('incident:updated', handleIncidentUpdate);
+    socket.on('incident:deleted', handleIncidentUpdate);
+
+    return () => {
+      socket.off('incident:created', handleIncidentUpdate);
+      socket.off('incident:updated', handleIncidentUpdate);
+      socket.off('incident:deleted', handleIncidentUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -553,38 +570,38 @@ const Volunteers = () => {
   });
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <Navigation currentPage="volunteers" />
+    <div className="bg-slate-950 text-slate-200 min-h-screen">
+      <Navigation />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Volunteer Dashboard</h1>
-          <p className="text-gray-600 mt-2">Manage incidents and coordinate response efforts</p>
+          <h1 className="text-3xl font-bold text-white">Volunteer Dashboard</h1>
+          <p className="text-slate-400 mt-2">Manage incidents and coordinate response efforts</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 text-sm font-medium">Available Tasks</p>
-            <p className="text-3xl font-bold text-gray-900">{availableTasks.length}</p>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <p className="text-slate-400 text-sm font-medium">Available Tasks</p>
+            <p className="text-3xl font-bold text-white">{availableTasks.length}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 text-sm font-medium">My Tasks</p>
-            <p className="text-3xl font-bold text-gray-900">{myTasks.length}</p>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <p className="text-slate-400 text-sm font-medium">My Tasks</p>
+            <p className="text-3xl font-bold text-white">{myTasks.length}</p>
           </div>
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 text-sm font-medium">Completed</p>
-            <p className="text-3xl font-bold text-gray-900">{completedTasks.length}</p>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <p className="text-slate-400 text-sm font-medium">Completed</p>
+            <p className="text-3xl font-bold text-white">{completedTasks.length}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Available Incidents</h3>
+              <h3 className="text-lg font-semibold text-white">Available Incidents</h3>
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                className="text-sm border border-slate-700 bg-slate-950 text-slate-200 rounded-md px-2 py-1"
               >
                 <option value="all">All Types</option>
                 <option value="fire">🔥 Fire</option>
@@ -592,18 +609,25 @@ const Volunteers = () => {
                 <option value="flood">🌊 Flood</option>
                 <option value="earthquake">🌍 Earthquake</option>
                 <option value="storm">⛈️ Storm</option>
+                <option value="accident">🚗 Accident</option>
                 <option value="other">📋 Other</option>
               </select>
             </div>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+            <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
               {availableTasks.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No available incidents</p>
+                <p className="text-center text-slate-500 py-8">No available incidents</p>
               ) : (
                 availableTasks.map(task => (
-                  <div key={task.id} className="p-4 bg-gray-50 rounded-lg border-l-4 border-green-500">
-                    <h4 className="font-medium text-gray-900 mb-2">{task.id}</h4>
-                    <p className="text-sm text-gray-700 mb-1">{task.description}</p>
-                    <p className="text-xs text-gray-600 mb-2">{task.type.toUpperCase()} • {getSeverityText(task.severity)}</p>
+                  <div key={task.id} className="p-4 bg-slate-950/60 rounded-lg border-l-4 border-emerald-500">
+                    <h4 className="font-medium text-white mb-2">{task.id}</h4>
+                    <p className="text-sm text-slate-300 mb-1">{task.description}</p>
+                    {task.ai?.summary && (
+                      <p className="text-xs text-slate-400 mb-1">AI Summary: {task.ai.summary}</p>
+                    )}
+                    {task.ai?.duplicateOf && (
+                      <p className="text-xs text-red-600 mb-1">Possible duplicate of {task.ai.duplicateOf} (score {task.ai.duplicateScore})</p>
+                    )}
+                    <p className="text-xs text-slate-400 mb-2">{task.type.toUpperCase()} • {getSeverityText(task.severity)}</p>
                     <div className="flex gap-2">
                       <button
                         onClick={() => assignTaskToVolunteer(task.id)}
@@ -628,17 +652,20 @@ const Volunteers = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">My Assigned Tasks</h3>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">My Assigned Tasks</h3>
+            <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
               {myTasks.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No assigned tasks</p>
+                <p className="text-center text-slate-500 py-8">No assigned tasks</p>
               ) : (
                 myTasks.map(task => (
-                  <div key={task.id} className="p-4 bg-gray-50 rounded-lg border-l-4 border-blue-500">
-                    <h4 className="font-medium text-gray-900 mb-2">{task.id}</h4>
-                    <p className="text-sm text-gray-700 mb-1">{task.description}</p>
-                    <p className="text-xs text-gray-600 mb-2">{task.type.toUpperCase()} • {formatTime(task.timestamp)}</p>
+                  <div key={task.id} className="p-4 bg-slate-950/60 rounded-lg border-l-4 border-indigo-500">
+                    <h4 className="font-medium text-white mb-2">{task.id}</h4>
+                    <p className="text-sm text-slate-300 mb-1">{task.description}</p>
+                    {task.ai?.summary && (
+                      <p className="text-xs text-slate-400 mb-1">AI Summary: {task.ai.summary}</p>
+                    )}
+                    <p className="text-xs text-slate-400 mb-2">{task.type.toUpperCase()} • {formatTime(task.timestamp)}</p>
                     <div className="flex flex-col gap-2">
                       <div className="flex gap-2">
                         <button
@@ -672,16 +699,16 @@ const Volunteers = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Completed Tasks</h3>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Completed Tasks</h3>
+            <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
               {completedTasks.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No completed tasks</p>
+                <p className="text-center text-slate-500 py-8">No completed tasks</p>
               ) : (
                 completedTasks.map(task => (
-                  <div key={task.id} className="p-4 bg-gray-50 rounded-lg border-l-4 border-gray-500">
-                    <h4 className="font-medium text-gray-900 mb-2">{task.description}</h4>
-                    <p className="text-xs text-gray-600">Completed {formatTime(task.resolvedAt)}</p>
+                  <div key={task.id} className="p-4 bg-slate-950/60 rounded-lg border-l-4 border-slate-600">
+                    <h4 className="font-medium text-white mb-2">{task.description}</h4>
+                    <p className="text-xs text-slate-400">Completed {formatTime(task.resolvedAt)}</p>
                   </div>
                 ))
               )}
@@ -689,9 +716,9 @@ const Volunteers = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Live Incident Map</h3>
+            <h3 className="text-lg font-semibold text-white">Live Incident Map</h3>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowHeatmap(!showHeatmap)}
