@@ -69,9 +69,16 @@ const incidentSchema = new mongoose.Schema({
     enum: ['medical-supplies', 'food-water', 'shelter', 'clothing', 'transportation', 'heavy-equipment', 'communication', 'power-generators', 'other']
   }],
   weatherConditions: {
-    type: String,
-    enum: ['clear', 'rainy', 'stormy', 'snowy', 'foggy', 'windy', 'other'],
-    description: String
+    type: {
+      type: String,
+      enum: ['clear', 'rainy', 'stormy', 'snowy', 'foggy', 'windy', 'other'],
+      default: 'clear'
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: ''
+    }
   },
   incidentTime: {
     type: Date,

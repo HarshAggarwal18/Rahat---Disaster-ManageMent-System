@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import Navigation from './Navigation';
 import { getSession } from '../utils/storage';
 import { incidentsAPI, usersAPI, adminAPI } from '../utils/api';
@@ -27,6 +28,57 @@ const Dashboard = () => {
   const heatLayerRef = useRef(null);
   const typedTextRef = useRef(null);
 
+  const location = useLocation();
+
+  const loadData = useCallback(async () => {
+    try {
+      console.log('Dashboard: Loading data...');
+      const incidentsResponse = await incidentsAPI.getAll();
+      console.log('Dashboard: Incidents response:', incidentsResponse);
+      
+      if (incidentsResponse.success) {
+        const incidentsData = incidentsResponse.data || [];
+        console.log('Dashboard: Setting incidents:', incidentsData.length);
+        setIncidents(incidentsData);
+        
+        const verifiedIncidents = incidentsData.filter(i => i.verified);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const resolvedToday = incidentsData.filter(i => {
+          if (!i.resolvedAt) return false;
+          const resolvedDate = new Date(i.resolvedAt);
+          resolvedDate.setHours(0, 0, 0, 0);
+          return resolvedDate.getTime() === today.getTime();
+        }).length;
+
+        try {
+          const usersResponse = await usersAPI.getAll();
+          const users = usersResponse.success ? (usersResponse.data || []) : [];
+          setStats({
+            critical: verifiedIncidents.length,
+            volunteers: users.filter(u => u.role === 'volunteer').length,
+            resolved: resolvedToday,
+            avgResponse: 12
+          });
+        } catch (err) {
+          console.warn('Dashboard: Could not load users (may not be admin):', err);
+          setStats({
+            critical: verifiedIncidents.length,
+            volunteers: 0,
+            resolved: resolvedToday,
+            avgResponse: 12
+          });
+        }
+      } else {
+        console.error('Dashboard: Incidents response not successful:', incidentsResponse);
+        showNotification('Failed to load incidents', 'error');
+      }
+    } catch (error) {
+      console.error('Dashboard: Error loading data:', error);
+      showNotification(error.message || 'Failed to load data', 'error');
+    }
+  }, []);
+
   useEffect(() => {
     const session = getSession();
     if (!session) {
@@ -35,7 +87,7 @@ const Dashboard = () => {
     }
     setUser(session);
     loadData();
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     const handleIncidentUpdate = () => {
@@ -51,10 +103,15 @@ const Dashboard = () => {
       socket.off('incident:updated', handleIncidentUpdate);
       socket.off('incident:deleted', handleIncidentUpdate);
     };
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
-    // Initialize typed text animation after component mounts
+    if (location.state?.unauthorized) {
+      showNotification('Access denied: admin permissions required.', 'warning');
+    }
+  }, [location]);
+
+  useEffect(() => {
     if (window.Typed && typedTextRef.current && user) {
       new window.Typed(typedTextRef.current, {
         strings: [
@@ -114,59 +171,6 @@ const Dashboard = () => {
       return () => clearTimeout(timer);
     }
   }, [incidents, showHeatmap]);
-
-  const loadData = async () => {
-    try {
-      console.log('Dashboard: Loading data...');
-      // Load incidents
-      const incidentsResponse = await incidentsAPI.getAll();
-      console.log('Dashboard: Incidents response:', incidentsResponse);
-      
-      if (incidentsResponse.success) {
-        const incidentsData = incidentsResponse.data || [];
-        console.log('Dashboard: Setting incidents:', incidentsData.length);
-        setIncidents(incidentsData);
-        
-        const verifiedIncidents = incidentsData.filter(i => i.verified);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const resolvedToday = incidentsData.filter(i => {
-          if (!i.resolvedAt) return false;
-          const resolvedDate = new Date(i.resolvedAt);
-          resolvedDate.setHours(0, 0, 0, 0);
-          return resolvedDate.getTime() === today.getTime();
-        }).length;
-
-        // Load users for volunteer count
-        try {
-          const usersResponse = await usersAPI.getAll();
-          const users = usersResponse.success ? (usersResponse.data || []) : [];
-          
-          setStats({
-            critical: verifiedIncidents.length,
-            volunteers: users.filter(u => u.role === 'volunteer').length,
-            resolved: resolvedToday,
-            avgResponse: 12
-          });
-        } catch (err) {
-          console.warn('Dashboard: Could not load users (may not be admin):', err);
-          // If user API fails (not admin), use default
-          setStats({
-            critical: verifiedIncidents.length,
-            volunteers: 0,
-            resolved: resolvedToday,
-            avgResponse: 12
-          });
-        }
-      } else {
-        console.error('Dashboard: Incidents response not successful:', incidentsResponse);
-        showNotification('Failed to load incidents', 'error');
-      }
-    } catch (error) {
-      console.error('Dashboard: Error loading data:', error);
-      showNotification(error.message || 'Failed to load data', 'error');
-    }
-  };
 
   const initializeMap = () => {
     if (!window.L || !mapRef.current) {

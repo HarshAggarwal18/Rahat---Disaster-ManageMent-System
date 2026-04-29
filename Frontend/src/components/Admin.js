@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Navigation from './Navigation';
 import { getSession } from '../utils/storage';
 import { incidentsAPI, usersAPI, adminAPI, groupsAPI } from '../utils/api';
@@ -27,6 +27,57 @@ const Admin = () => {
   const heatLayerRef = useRef(null);
   const volunteerMarkersRef = useRef({});
 
+  const loadData = useCallback(async () => {
+    try {
+      console.log('Admin: Loading data...');
+      const incidentsResponse = await incidentsAPI.getAll();
+      console.log('Admin: Incidents response:', incidentsResponse);
+
+      if (incidentsResponse.success) {
+        const incidentsData = incidentsResponse.data || [];
+        console.log('Admin: Setting incidents:', incidentsData.length);
+        setIncidents(incidentsData);
+      } else {
+        console.error('Admin: Incidents response not successful:', incidentsResponse);
+      }
+
+      try {
+        const usersResponse = await usersAPI.getAll();
+        console.log('Admin: Users response:', usersResponse);
+
+        if (usersResponse.success) {
+          const usersData = usersResponse.data || [];
+          console.log('Admin: Setting users:', usersData.length);
+          setUsers(usersData);
+        } else {
+          console.error('Admin: Users response not successful:', usersResponse);
+        }
+      } catch (userError) {
+        console.error('Admin: Error loading users:', userError);
+      }
+
+      try {
+        const groupsResponse = await groupsAPI.getAll();
+        if (groupsResponse.success) {
+          setGroups(groupsResponse.data || []);
+        }
+      } catch (groupError) {
+        console.error('Admin: Error loading groups:', groupError);
+      }
+
+      try {
+        const logsResponse = await adminAPI.getAuditLogs();
+        if (logsResponse.success) {
+          setAuditLogs(logsResponse.data || []);
+        }
+      } catch (auditError) {
+        console.error('Admin: Error loading audit logs:', auditError);
+      }
+    } catch (error) {
+      console.error('Admin: Error loading data:', error);
+    }
+  }, []);
+
   useEffect(() => {
     const session = getSession();
     if (!session || session.role !== 'admin') {
@@ -35,7 +86,7 @@ const Admin = () => {
     }
     setUser(session);
     loadData();
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     // Initialize map when dashboard section is active
@@ -101,7 +152,7 @@ const Admin = () => {
       socket.off('incident:deleted', handleIncidentUpdate);
       socket.off('volunteer:location', handleIncidentUpdate);
     };
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     const loadRecommendations = async () => {
@@ -125,62 +176,6 @@ const Admin = () => {
     loadRecommendations();
   }, [assigningIncident]);
 
-  const loadData = async () => {
-    try {
-      console.log('Admin: Loading data...');
-      // Load incidents
-      const incidentsResponse = await incidentsAPI.getAll();
-      console.log('Admin: Incidents response:', incidentsResponse);
-      
-      if (incidentsResponse.success) {
-        const incidentsData = incidentsResponse.data || [];
-        console.log('Admin: Setting incidents:', incidentsData.length);
-        setIncidents(incidentsData);
-      } else {
-        console.error('Admin: Incidents response not successful:', incidentsResponse);
-      }
-      
-      // Load users
-      try {
-        const usersResponse = await usersAPI.getAll();
-        console.log('Admin: Users response:', usersResponse);
-        
-        if (usersResponse.success) {
-          const usersData = usersResponse.data || [];
-          console.log('Admin: Setting users:', usersData.length);
-          setUsers(usersData);
-        } else {
-          console.error('Admin: Users response not successful:', usersResponse);
-        }
-      } catch (userError) {
-        console.error('Admin: Error loading users:', userError);
-        // Don't show error for users, just log it
-      }
-
-      // Load groups
-      try {
-        const groupsResponse = await groupsAPI.getAll();
-        if (groupsResponse.success) {
-          setGroups(groupsResponse.data || []);
-        }
-      } catch (groupError) {
-        console.error('Admin: Error loading groups:', groupError);
-      }
-
-      // Load audit logs
-      try {
-        const logsResponse = await adminAPI.getAuditLogs();
-        if (logsResponse.success) {
-          setAuditLogs(logsResponse.data || []);
-        }
-      } catch (auditError) {
-        console.error('Admin: Error loading audit logs:', auditError);
-      }
-    } catch (error) {
-      console.error('Admin: Error loading data:', error);
-      showNotification(error.message || 'Failed to load data', 'error');
-    }
-  };
 
   const createGroup = async () => {
     if (!groupForm.name.trim()) {

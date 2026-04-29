@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const Incident = require('../models/Incident');
 const User = require('../models/User');
 const { sendEmail, incidentReportedEmail } = require('../utils/email');
-const { protect } = require('../middleware/auth');
+const { protect, authorize } = require('../middleware/auth');
 const { createAuditLog } = require('../utils/auditLogger');
 const { generateIncidentId } = require('../utils/generateId');
 const { buildIncidentAI } = require('../utils/incidentAI');
@@ -24,12 +24,21 @@ router.get('/', protect, async (req, res) => {
     if (type) query.type = type;
     if (severity) query.severity = parseInt(severity);
 
-    const incidents = await Incident.find(query)
+    let incidents = await Incident.find(query)
       .populate('reporterId', 'firstName lastName email')
       .populate('assignedTo', 'firstName lastName email')
       .populate('verifiedBy', 'firstName lastName email')
       .populate('assignedVolunteers', 'firstName lastName email')
       .sort({ timestamp: -1 });
+
+    if (incidents.length > 0) {
+      incidents = await Promise.all(incidents.map(async (incident) => {
+        if (!incident.ai || !incident.ai.summary) {
+          return backfillIncidentAI(incident);
+        }
+        return incident;
+      }));
+    }
 
     res.json({
       success: true,
@@ -48,9 +57,30 @@ router.get('/', protect, async (req, res) => {
 // @route   GET /api/incidents/:id
 // @desc    Get single incident
 // @access  Private
+const backfillIncidentAI = async (incident) => {
+  if (incident.ai && incident.ai.summary) {
+    return incident;
+  }
+
+  const recentIncidents = await Incident.find({
+    timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+  }).select('id type severity description location timestamp');
+
+  const ai = buildIncidentAI({
+    type: incident.type,
+    severity: incident.severity,
+    description: incident.description,
+    location: incident.location
+  }, recentIncidents);
+
+  incident.ai = ai;
+  await incident.save();
+  return incident;
+};
+
 router.get('/:id', protect, async (req, res) => {
   try {
-    const incident = await Incident.findOne({ id: req.params.id })
+    let incident = await Incident.findOne({ id: req.params.id })
       .populate('reporterId', 'firstName lastName email')
       .populate('assignedTo', 'firstName lastName email')
       .populate('verifiedBy', 'firstName lastName email')
@@ -63,6 +93,10 @@ router.get('/:id', protect, async (req, res) => {
       });
     }
 
+    if (!incident.ai || !incident.ai.summary) {
+      incident = await backfillIncidentAI(incident);
+    }
+
     res.json({
       success: true,
       data: incident
@@ -72,6 +106,29 @@ router.get('/:id', protect, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error'
+    });
+  }
+});
+
+// @route   POST /api/incidents/backfill-ai
+router.post('/backfill-ai', protect, authorize('admin'), async (req, res) => {
+  try {
+    const incidents = await Incident.find({ $or: [{ 'ai.summary': { $exists: false } }, { 'ai.confidence': { $exists: false } }] });
+
+    const updated = await Promise.all(incidents.map(async (incident) => {
+      return backfillIncidentAI(incident);
+    }));
+
+    res.json({
+      success: true,
+      count: updated.length,
+      data: updated
+    });
+  } catch (error) {
+    console.error('Backfill AI error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Could not backfill AI metadata'
     });
   }
 });
@@ -97,7 +154,11 @@ router.post('/', protect, [
   body('resourcesNeeded').optional().isArray().withMessage('Resources needed must be an array'),
   body('resourcesNeeded.*').optional().isIn(['medical-supplies', 'food-water', 'shelter', 'clothing', 'transportation', 'heavy-equipment', 'communication', 'power-generators', 'other']).withMessage('Invalid resource type'),
   body('weatherConditions.type').optional().isIn(['clear', 'rainy', 'stormy', 'snowy', 'foggy', 'windy', 'other']).withMessage('Invalid weather condition'),
-  body('incidentTime').optional().isISO8601().withMessage('Invalid incident time format')
+  body('weatherConditions.description').optional().trim().isLength({ max: 200 }).withMessage('Weather description must be 200 characters or less'),
+  body('incidentTime').optional().isISO8601().withMessage('Invalid incident time format'),
+  body('additionalDetails.observations').optional().trim().isLength({ max: 500 }).withMessage('Observations must be 500 characters or less'),
+  body('additionalDetails.hazards').optional().trim().isLength({ max: 500 }).withMessage('Hazards must be 500 characters or less'),
+  body('additionalDetails.accessibility').optional().trim().isLength({ max: 300 }).withMessage('Accessibility details must be 300 characters or less')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

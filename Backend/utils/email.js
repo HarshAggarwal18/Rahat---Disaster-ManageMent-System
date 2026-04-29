@@ -21,17 +21,26 @@ const createTransport = () => {
 
 const sendEmail = async ({ to, subject, html }) => {
   const transporter = createTransport();
-  if (!transporter) return;
+  if (!transporter) {
+    console.error('Email send aborted: SMTP configuration is missing or incomplete. Set SMTP_USER and SMTP_PASS.');
+    return false;
+  }
 
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
   const recipients = Array.isArray(to) ? to.join(',') : to;
 
-  await transporter.sendMail({
-    from,
-    to: recipients,
-    subject,
-    html
-  });
+  try {
+    await transporter.sendMail({
+      from,
+      to: recipients,
+      subject,
+      html
+    });
+    return true;
+  } catch (error) {
+    console.error('Email send failed:', error.message);
+    return false;
+  }
 };
 
 const incidentReportedEmail = (incident) => ({

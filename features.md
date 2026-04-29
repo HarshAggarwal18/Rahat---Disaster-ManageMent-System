@@ -55,3 +55,28 @@
   - valid values: `admin`, `volunteer`
 - **Usage:** `Backend/routes/groups.js` sets `roleScope: req.user.role` when creating groups.
 - **Why it matters:** Ensures groups are correctly scoped for admin or volunteer operations; missing `roleScope` causes validation failure.
+
+## 7. Current issue: duplicate `loadData` function in Dashboard component
+- **What it is:** The React `Dashboard` component contained two definitions of `loadData`, causing confusion and a potential stale hook state issue.
+- **Where it happens:** `Frontend/src/components/Dashboard.js`
+- **Why it matters:** Duplicate function definitions can cause unexpected behavior in hooks, make maintenance harder, and may lead to the app using the wrong data loader.
+- **Fix status:** Removed the duplicate `loadData` declaration and kept the `useCallback` hook-based loader for consistent effect dependency tracking.
+
+## 8. Open fixes and next user updates
+- **Completed fixes**
+  - Legacy `Main/` static files removed for a pure React SPA.
+  - API now supports legacy incident AI backfill via `POST /api/incidents/backfill-ai`.
+  - `weatherConditions` is normalized with validated `type` and `description` fields.
+  - SMTP email delivery now logs missing configuration and send failures clearly.
+  - Socket.IO notifications now handle reconnect and disconnect state in `Frontend/src/utils/socket.js`.
+  - `ProtectedRoute` now passes `unauthorized` state so the UI can show corrected feedback.
+  - React hook dependencies were corrected in both `Dashboard.js` and `Admin.js`.
+
+- **Remaining user update actions**
+  - Run `Backend/scripts/backfill-ai.js` or `npm run backfill-ai` to populate legacy incidents with AI metadata.
+  - Confirm SMTP environment variables (`SMTP_USER`, `SMTP_PASS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`) are defined before sending email notifications.
+  - Validate route redirects and unauthorized page behavior by signing in as a non-admin user and attempting to access admin routes.
+  - Test Socket.IO reconnect events in the browser and verify that reconnect status is displayed in the UI.
+  - Review and update README/setup docs with the new backfill step and email requirements if not yet documented.
+
+- **Why this matters:** These updates tighten the user experience, reduce silent failures, and make it easier for maintainers to see which fixes are already in place and which still need validation.

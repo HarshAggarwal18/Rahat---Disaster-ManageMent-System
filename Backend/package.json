@@ -8,6 +8,7 @@
     "dev": "nodemon server.js",
     "seed": "node scripts/seed.js",
     "seed-india": "node scripts/seed-india.js",
+    "backfill-ai": "node scripts/backfill-ai.js",
     "test-crud": "node scripts/test-crud.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
