@@ -27,15 +27,34 @@ const seedData = async () => {
       firstName: "Admin",
       lastName: "User",
       email: "admin@demo.com",
-      password: "pass@123",
+      password: "demo123",
       role: "admin",
+    });
+
+    const volunteer = await User.create({
+      firstName: "Volunteer",
+      lastName: "User",
+      email: "volunteer@demo.com",
+      password: "demo123",
+      role: "volunteer",
+      skills: ["First Aid", "CPR", "Rescue Operations"],
+      availability: true,
+      currentLocation: { lat: 40.7589, lng: -73.9851 },
+    });
+
+    const user = await User.create({
+      firstName: "Regular",
+      lastName: "User",
+      email: "user@demo.com",
+      password: "demo123",
+      role: "user",
     });
 
     const user1 = await User.create({
       firstName: "User",
       lastName: "One",
       email: "user1@demo.com",
-      password: "pass@123",
+      password: "demo123",
       role: "user",
     });
 
@@ -43,7 +62,7 @@ const seedData = async () => {
       firstName: "User",
       lastName: "Two",
       email: "user2@demo.com",
-      password: "pass@123",
+      password: "demo123",
       role: "user",
     });
 
@@ -51,7 +70,7 @@ const seedData = async () => {
       firstName: "User",
       lastName: "Three",
       email: "user3@demo.com",
-      password: "pass@123",
+      password: "demo123",
       role: "user",
     });
 
@@ -59,7 +78,7 @@ const seedData = async () => {
       firstName: "Volunteer",
       lastName: "One",
       email: "vol1@demo.com",
-      password: "pass@123",
+      password: "demo123",
       role: "volunteer",
       skills: ["First Aid", "CPR", "Fire Response"],
       availability: true,
@@ -70,7 +89,7 @@ const seedData = async () => {
       firstName: "Volunteer",
       lastName: "Two",
       email: "vol2@demo.com",
-      password: "pass@123",
+      password: "demo123",
       role: "volunteer",
       skills: ["Search & Rescue", "Medical", "Heavy Equipment"],
       availability: true,
@@ -81,7 +100,7 @@ const seedData = async () => {
       firstName: "Volunteer",
       lastName: "Three",
       email: "vol3@demo.com",
-      password: "pass@123",
+      password: "demo123",
       role: "volunteer",
       skills: ["Communication", "Logistics", "Shelter Management"],
       availability: false,
@@ -371,8 +390,10 @@ const seedData = async () => {
 
     console.log("\n✅ Seeding completed successfully!");
     console.log("\n📊 Demo Data Summary:");
-    console.log("👤 Users Created (all passwords: pass@123):");
+    console.log("👤 Users Created (all passwords: demo123):");
     console.log("   Admin: admin@demo.com");
+    console.log("   Volunteer: volunteer@demo.com");
+    console.log("   User: user@demo.com");
     console.log("   Users: user1@demo.com, user2@demo.com, user3@demo.com");
     console.log("   Volunteers: vol1@demo.com, vol2@demo.com, vol3@demo.com");
     console.log("👥 Groups: 2 volunteer groups created");
